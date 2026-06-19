@@ -1,4 +1,4 @@
-import { MOCK_MY_SERVICES } from '@/src/mock/data';
+import { MOCK_MY_SERVICES } from '@/mock/data';
 import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';

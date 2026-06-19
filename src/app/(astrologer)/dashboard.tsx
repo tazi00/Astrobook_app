@@ -1,4 +1,4 @@
-import { MOCK_ASTROLOGER_USER, MOCK_MY_BOOKINGS_AS_ASTROLOGER } from '@/src/mock/data';
+import { MOCK_ASTROLOGER_USER, MOCK_MY_BOOKINGS_AS_ASTROLOGER } from '@/mock/data';
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
