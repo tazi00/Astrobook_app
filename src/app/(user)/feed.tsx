@@ -14,7 +14,6 @@ import {
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
-// 20 mock posts
 const MOCK_FEED_POSTS = [
   {
     id: "1",
@@ -318,11 +317,24 @@ export default function FeedScreen() {
     );
   };
 
+  const goToPost = (postId: string) => {
+    router.push({
+      pathname: "/(user)/post/[id]" as any,
+      params: { id: postId },
+    });
+  };
+
+  const goToAstrologer = (astrologerId: string) => {
+    router.push({
+      pathname: "/(user)/astrologer-profile" as any,
+      params: { id: astrologerId },
+    });
+  };
+
   return (
     <View style={styles.root}>
       <Header />
       <ScrollView showsVerticalScrollIndicator={false} style={styles.scroll}>
-        {/* Posts */}
         {posts.map((post) => (
           <View key={post.id} style={styles.postCard}>
             <LinearGradient
@@ -336,16 +348,11 @@ export default function FeedScreen() {
               style={{ height: 2, width: "100%" }}
             />
 
-            {/* Post Header — click → astrologer detail */}
+            {/* Post Header — click → astrologer profile */}
             <TouchableOpacity
               style={styles.postHeader}
               activeOpacity={0.8}
-              onPress={() =>
-                router.push({
-                  pathname: "/(user)/astrologer-profile" as any,
-                  params: { id: post.astrologerId },
-                })
-              }
+              onPress={() => goToAstrologer(post.astrologerId)}
             >
               <View style={styles.postAuthorRow}>
                 <View
@@ -383,15 +390,10 @@ export default function FeedScreen() {
               </View>
             </TouchableOpacity>
 
-            {/* Post Content Area — click → astrologer detail */}
+            {/* Post Content — click → post detail */}
             <TouchableOpacity
               activeOpacity={0.95}
-              onPress={() =>
-                router.push({
-                  pathname: "/(user)/astrologer-profile" as any,
-                  params: { id: post.astrologerId },
-                })
-              }
+              onPress={() => goToPost(post.id)}
             >
               <View
                 style={[
@@ -423,7 +425,10 @@ export default function FeedScreen() {
                     <Text style={styles.icon}>{post.liked ? "❤️" : "👍"}</Text>
                     <Text style={styles.count}>{post.likes}</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.actionBtn}>
+                  <TouchableOpacity
+                    style={styles.actionBtn}
+                    onPress={() => goToPost(post.id)}
+                  >
                     <Text style={styles.icon}>💬</Text>
                     <Text style={styles.count}>{post.comments}</Text>
                   </TouchableOpacity>
@@ -434,12 +439,7 @@ export default function FeedScreen() {
                 </View>
                 <TouchableOpacity
                   style={styles.bookBtn}
-                  onPress={() =>
-                    router.push({
-                      pathname: "/(user)/astrologer-profile" as any,
-                      params: { id: post.astrologerId },
-                    })
-                  }
+                  onPress={() => goToAstrologer(post.astrologerId)}
                 >
                   <Text style={styles.bookText}>Book Now</Text>
                 </TouchableOpacity>
@@ -447,7 +447,6 @@ export default function FeedScreen() {
             </View>
           </View>
         ))}
-
         <View style={{ height: 32 }} />
       </ScrollView>
     </View>

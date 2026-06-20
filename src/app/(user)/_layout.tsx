@@ -29,15 +29,16 @@ const TABS = [
       <MaterialCommunityIcons name="star-four-points" size={22} color={color} />
     ),
   },
+
   {
     name: "astrologers",
-    icon: (color: string) => (
-      <MaterialCommunityIcons name="zodiac-aries" size={22} color={color} />
-    ),
+    icon: (color: string) => <Feather name="user" size={22} color={color} />,
   },
   {
     name: "profile",
-    icon: (color: string) => <Feather name="user" size={22} color={color} />,
+    icon: (color: string) => (
+      <MaterialCommunityIcons name="zodiac-aries" size={22} color={color} />
+    ),
   },
 ];
 
@@ -97,6 +98,8 @@ export default function UserLayout() {
       <Tabs.Screen name="astrologer-profile" options={{ href: null }} />
       <Tabs.Screen name="book-slot" options={{ href: null }} />
       <Tabs.Screen name="my-bookings" options={{ href: null }} />
+      <Tabs.Screen name="post/[id]" options={{ href: null }} />
+      <Tabs.Screen name="service/[id]" options={{ href: null }} />
     </Tabs>
   );
 }
