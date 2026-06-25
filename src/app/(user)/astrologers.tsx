@@ -1,18 +1,120 @@
 import Header from "@/components/header";
-import { MOCK_ASTROLOGERS, MOCK_POSTS } from "@/mock/data";
-import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
   FlatList,
-  Modal,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
-  TouchableWithoutFeedback,
   View,
 } from "react-native";
+
+// --- MOCK DATA ---
+const MOCK_ASTROLOGERS = [
+  {
+    id: "1",
+    name: "Suprio Karmakar",
+    speciality: "Vedic Astrology",
+    languages: "Bengali, Hindi, English",
+    experience: "12 years",
+    rating: 4.8,
+    reviews: 342,
+    price: 499,
+    emoji: "🔮",
+    color: "#6B21A8",
+    online: true,
+    category: "all",
+  },
+  {
+    id: "2",
+    name: "Ananya Sharma",
+    speciality: "Tarot Reading",
+    languages: "Hindi, English",
+    experience: "8 years",
+    rating: 4.6,
+    reviews: 218,
+    price: 349,
+    emoji: "⭐",
+    color: "#BE185D",
+    online: true,
+    category: "love",
+  },
+  {
+    id: "3",
+    name: "Rohit Verma",
+    speciality: "Numerology",
+    languages: "Hindi, English",
+    experience: "6 years",
+    rating: 4.5,
+    reviews: 156,
+    price: 299,
+    emoji: "🌙",
+    color: "#1D4ED8",
+    online: true,
+    category: "education",
+  },
+  {
+    id: "4",
+    name: "Priya Nair",
+    speciality: "Palmistry",
+    languages: "Malayalam, English, Hindi",
+    experience: "10 years",
+    rating: 4.7,
+    reviews: 289,
+    price: 399,
+    emoji: "☀️",
+    color: "#059669",
+    online: true,
+    category: "health",
+  },
+  {
+    id: "5",
+    name: "Vikash Joshi",
+    speciality: "Vastu Shastra",
+    languages: "Hindi, English",
+    experience: "15 years",
+    rating: 4.9,
+    reviews: 421,
+    price: 599,
+    emoji: "🪐",
+    color: "#B45309",
+    online: true,
+    category: "career",
+  },
+];
+
+const MOCK_POSTS = [
+  {
+    id: "1",
+    astrologerId: "1",
+    astrologerName: "Suprio Karmakar",
+    emoji: "🙏",
+    bgColor: "#6B21A8",
+    content:
+      "দুর্গতি নাশিনী\nইয়া দেবী সর্বভূতেষু, শক্তি রূপেণ সংস্থিতা!\nনমস্তে নমস্তে নমস্তে নমো নমঃ ॥",
+    footer: "মহালয়া শুভেচ্ছা",
+    likes: 248,
+    comments: 42,
+    shares: 18,
+    createdAt: "2025-11-01T10:00:00Z",
+  },
+
+  {
+    id: "3",
+    astrologerId: "2",
+    astrologerName: "Ananya Sharma",
+    emoji: "🌟",
+    bgColor: "#1E3A5F",
+    content:
+      "Mercury Retrograde ends today! Time to move forward with clarity.",
+    footer: "Cosmic Update",
+    likes: 156,
+    comments: 28,
+    shares: 12,
+    createdAt: "2025-11-01T08:00:00Z",
+  },
+];
 
 const FILTERS = [
   { id: "all", label: "All" },
@@ -24,6 +126,7 @@ const FILTERS = [
   { id: "spiritual", label: "Spiritual" },
 ];
 
+// --- STAR RATING COMPONENT ---
 function StarRating({ rating }: { rating: number }) {
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
@@ -32,30 +135,41 @@ function StarRating({ rating }: { rating: number }) {
           key={i}
           style={{
             fontSize: 12,
-            color: i <= Math.floor(rating) ? "#F59E0B" : "#DDD",
+            color: i <= Math.floor(rating) ? "#F59E0B" : "#E5E7EB",
           }}
         >
           ★
         </Text>
       ))}
-      <Text style={{ fontSize: 11, color: "#666", marginLeft: 3 }}>
+      <Text style={{ fontSize: 11, color: "#6B7280", marginLeft: 4 }}>
         {rating}
       </Text>
     </View>
   );
 }
 
-type Post = (typeof MOCK_POSTS)[number];
-
 export default function AstrologersScreen() {
   const router = useRouter();
   const [activeFilter, setActiveFilter] = useState("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [selectedPost, setSelectedPost] = useState<Post | null>(null);
 
   const toggleExpand = (id: string) => {
     setExpandedId((prev) => (prev === id ? null : id));
   };
+
+  // Post Detail Page par navigate karne ka function
+  const goToPost = (postId: string) => {
+    router.push({
+      pathname: "/(user)/post/[id]" as any,
+      params: { id: postId },
+    });
+  };
+
+  // Filtering Logic
+  const filteredAstrologers = MOCK_ASTROLOGERS.filter((item) => {
+    if (activeFilter === "all") return true;
+    return item.category === activeFilter;
+  });
 
   return (
     <View style={styles.root}>
@@ -92,7 +206,7 @@ export default function AstrologersScreen() {
 
       {/* Astrologer List */}
       <FlatList
-        data={MOCK_ASTROLOGERS}
+        data={filteredAstrologers}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
@@ -110,35 +224,24 @@ export default function AstrologersScreen() {
                 onPress={() => toggleExpand(item.id)}
               >
                 <View style={styles.cardTop}>
-                  <View
-                    style={[styles.avatar, { backgroundColor: item.color }]}
-                  >
+                  {/* 1. Avatar */}
+                  <View style={styles.avatarContainer}>
                     <Text style={styles.avatarEmoji}>{item.emoji}</Text>
-                    <View
-                      style={[
-                        styles.onlineDot,
-                        {
-                          backgroundColor: item.online ? "#22C55E" : "#9CA3AF",
-                        },
-                      ]}
-                    />
                   </View>
 
+                  {/* 2. Info Section */}
                   <View style={styles.cardInfo}>
                     <View style={styles.nameRow}>
                       <Text style={styles.cardName} numberOfLines={1}>
                         {item.name}
                       </Text>
-                      <TouchableOpacity
-                        style={styles.followBtn}
-                        onPress={(e) => e.stopPropagation?.()}
-                      >
-                        <Text style={styles.followBtnText}>Follow +</Text>
-                      </TouchableOpacity>
                     </View>
                     <Text style={styles.cardSpeciality}>{item.speciality}</Text>
-                    <Text style={styles.cardMeta}>{item.languages}</Text>
-                    <Text style={styles.cardMeta}>Exp: {item.experience}</Text>
+                    <Text style={styles.cardMeta}>
+                      {item.languages}{" "}
+                      {item.experience ? `· Exp: ${item.experience}` : ""}
+                    </Text>
+
                     <View style={styles.ratingRow}>
                       <StarRating rating={item.rating} />
                       <Text style={styles.reviewCount}>
@@ -147,9 +250,18 @@ export default function AstrologersScreen() {
                     </View>
                   </View>
 
+                  {/* 3. Right Actions (Follow + Book) */}
                   <View style={styles.cardRight}>
                     <TouchableOpacity
-                      style={styles.bookBtn}
+                      style={styles.followBtn}
+                      onPress={(e) => e.stopPropagation?.()}
+                    >
+                      <Text style={styles.followBtnText}>Follow +</Text>
+                    </TouchableOpacity>
+
+                    {/* Split Book Now Button */}
+                    <TouchableOpacity
+                      style={styles.bookBtnWrapper}
                       onPress={() =>
                         router.push({
                           pathname: "/(user)/astrologer-profile" as any,
@@ -157,189 +269,76 @@ export default function AstrologersScreen() {
                         })
                       }
                     >
-                      <Text style={styles.bookBtnPrice}>₹{item.price}</Text>
-                      <Text style={styles.bookBtnText}>Book Now</Text>
+                      <View style={styles.bookBtnTop}>
+                        <Text style={styles.bookBtnText}>Book Now</Text>
+                      </View>
+                      <View style={styles.bookBtnBottom}>
+                        <Text style={styles.bookBtnPrice}>₹{item.price}</Text>
+                      </View>
                     </TouchableOpacity>
-                    <Feather
-                      name={isExpanded ? "chevron-up" : "chevron-down"}
-                      size={18}
-                      color="#9CA3AF"
-                      style={{ marginTop: 8, alignSelf: "center" }}
-                    />
                   </View>
                 </View>
               </TouchableOpacity>
 
-              {/* Dropdown — Posts */}
+              {/* Dropdown — Posts (Full width, Square Cards) */}
               {isExpanded && (
                 <View style={styles.dropdown}>
                   <View style={styles.dropdownDivider} />
-                  <Text style={styles.dropdownTitle}>
-                    Posts by {item.name.split(" ")[0]}
-                  </Text>
+
+                  <View style={styles.dropdownHeaderRow}>
+                    <Text style={styles.dropdownTitle}>
+                      Posts by {item.name.split(" ")[0]}
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() =>
+                        router.push({
+                          pathname: "/(user)/astrologer-profile" as any,
+                          params: { id: item.id, tab: "posts" },
+                        })
+                      }
+                    >
+                      <Text style={styles.seeMoreLink}>See more posts</Text>
+                    </TouchableOpacity>
+                  </View>
 
                   {astrologerPosts.length === 0 ? (
                     <Text style={styles.noPostsText}>No posts yet</Text>
                   ) : (
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={styles.postsRow}
-                    >
+                    <View style={styles.postsList}>
                       {astrologerPosts.map((post) => (
                         <TouchableOpacity
                           key={post.id}
                           style={[
-                            styles.postThumb,
+                            styles.postSquareCard,
                             { backgroundColor: post.bgColor },
                           ]}
                           activeOpacity={0.85}
-                          onPress={() => setSelectedPost(post)}
+                          onPress={() => goToPost(post.id)} // Click → Navigate to Post Detail
                         >
-                          <Text style={styles.postThumbEmoji}>
-                            {post.emoji}
-                          </Text>
-                          <Text
-                            style={styles.postThumbContent}
-                            numberOfLines={3}
-                          >
-                            {post.content}
-                          </Text>
+                          <View>
+                            <Text style={styles.postThumbEmoji}>
+                              {post.emoji}
+                            </Text>
+                            <Text
+                              style={styles.postThumbContent}
+                              numberOfLines={6}
+                            >
+                              {post.content}
+                            </Text>
+                          </View>
                           <Text style={styles.postThumbFooter}>
                             {post.footer}
                           </Text>
                         </TouchableOpacity>
                       ))}
-                    </ScrollView>
+                    </View>
                   )}
-
-                  {/* View Profile */}
-                  <TouchableOpacity
-                    style={styles.viewProfileBtn}
-                    onPress={() =>
-                      router.push({
-                        pathname: "/(user)/astrologer-profile" as any,
-                        params: { id: item.id },
-                      })
-                    }
-                  >
-                    <Text style={styles.viewProfileText}>
-                      View Full Profile →
-                    </Text>
-                  </TouchableOpacity>
                 </View>
               )}
             </View>
           );
         }}
       />
-
-      {/* Post Modal */}
-      <Modal
-        visible={!!selectedPost}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setSelectedPost(null)}
-      >
-        <TouchableWithoutFeedback onPress={() => setSelectedPost(null)}>
-          <View style={styles.modalOverlay}>
-            <TouchableWithoutFeedback>
-              <View style={styles.modalCard}>
-                {selectedPost && (
-                  <>
-                    {/* Square Post */}
-                    <View
-                      style={[
-                        styles.postSquare,
-                        { backgroundColor: selectedPost.bgColor },
-                      ]}
-                    >
-                      <View style={styles.modalPostHeader}>
-                        <View style={styles.modalAvatar}>
-                          <Text style={{ fontSize: 18 }}>
-                            {selectedPost.emoji}
-                          </Text>
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.modalAuthorName}>
-                            {selectedPost.astrologerName}
-                          </Text>
-                          <Text style={styles.modalPostBadge}>
-                            {selectedPost.footer}
-                          </Text>
-                        </View>
-                        <TouchableOpacity
-                          style={styles.modalCloseBtn}
-                          onPress={() => setSelectedPost(null)}
-                        >
-                          <Feather
-                            name="x"
-                            size={18}
-                            color="rgba(255,255,255,0.8)"
-                          />
-                        </TouchableOpacity>
-                      </View>
-
-                      <Text style={styles.modalPostContent} numberOfLines={8}>
-                        {selectedPost.content}
-                      </Text>
-
-                      <View style={styles.modalPostFooterRow}>
-                        <View style={styles.postLogoRow}>
-                          <Text style={styles.postLogoAstro}>Astro</Text>
-                          <View style={styles.postLogoBadge}>
-                            <Text style={styles.postLogoBook}>Book</Text>
-                          </View>
-                        </View>
-                        <Text style={styles.modalPostDate}>
-                          {new Date(selectedPost.createdAt).toLocaleDateString(
-                            "en-IN",
-                            { day: "2-digit", month: "short" },
-                          )}
-                        </Text>
-                      </View>
-                    </View>
-
-                    {/* Actions + Read More */}
-                    <View style={styles.modalActions}>
-                      <TouchableOpacity style={styles.modalActionBtn}>
-                        <Text>👍</Text>
-                        <Text style={styles.modalActionText}>
-                          {selectedPost.likes}
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity style={styles.modalActionBtn}>
-                        <Text>💬</Text>
-                        <Text style={styles.modalActionText}>
-                          {selectedPost.comments}
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity style={styles.modalActionBtn}>
-                        <Text>↗</Text>
-                        <Text style={styles.modalActionText}>
-                          {selectedPost.shares}
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.readMoreBtn}
-                        onPress={() => {
-                          setSelectedPost(null);
-                          router.push({
-                            pathname: "/(user)/astrologer-profile" as any,
-                            params: { id: selectedPost.astrologerId },
-                          });
-                        }}
-                      >
-                        <Text style={styles.readMoreText}>Read more →</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </>
-                )}
-              </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
     </View>
   );
 }
@@ -351,10 +350,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#EDE9FF",
   },
-  filtersRow: { paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
+  filtersRow: { paddingHorizontal: 16, paddingVertical: 12, gap: 8 },
   filterChip: {
     paddingHorizontal: 16,
-    paddingVertical: 7,
+    paddingVertical: 8,
     borderRadius: 20,
     backgroundColor: "#F9F5FF",
     borderWidth: 1.5,
@@ -363,90 +362,97 @@ const styles = StyleSheet.create({
   filterChipActive: { backgroundColor: "#9d0399", borderColor: "#9d0399" },
   filterChipText: { fontSize: 13, color: "#666", fontWeight: "500" },
   filterChipTextActive: { color: "#FFF", fontWeight: "700" },
-  listContent: { padding: 16, gap: 14 },
+
+  listContent: { padding: 16, gap: 16 },
+
+  // --- CARD DESIGN ---
   card: {
     backgroundColor: "#FFF",
     borderRadius: 16,
     borderWidth: 1,
     borderColor: "#EDE9FF",
-    elevation: 2,
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
     overflow: "hidden",
   },
   cardTop: {
     flexDirection: "row",
-    gap: 12,
+    gap: 16,
     alignItems: "flex-start",
-    padding: 14,
+    padding: 16,
   },
-  avatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+  avatarContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 3,
+    borderColor: "#e8d5f5",
+    backgroundColor: "#FFF",
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
   },
-  avatarEmoji: { fontSize: 28 },
-  onlineDot: {
-    position: "absolute",
-    bottom: 2,
-    right: 2,
-    width: 13,
-    height: 13,
-    borderRadius: 6.5,
-    borderWidth: 2,
-    borderColor: "#FFF",
-  },
+  avatarEmoji: { fontSize: 34 },
   cardInfo: { flex: 1 },
-  nameRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 2,
-  },
-  cardName: { fontSize: 15, fontWeight: "700", color: "#1A1A2E", flex: 1 },
-  followBtn: {
-    borderWidth: 1,
-    borderColor: "#9d0399",
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    marginLeft: 8,
-  },
-  followBtnText: { color: "#9d0399", fontSize: 11, fontWeight: "600" },
+  nameRow: { flexDirection: "row", alignItems: "center", marginBottom: 1 },
+  cardName: { fontSize: 16, fontWeight: "700", color: "#0b1d5b" },
   cardSpeciality: {
     fontSize: 13,
     color: "#9d0399",
     fontWeight: "600",
-    marginBottom: 1,
+    marginBottom: 2,
   },
-  cardMeta: { fontSize: 11, color: "#888", marginBottom: 1 },
-  ratingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    marginTop: 2,
-  },
-  reviewCount: { fontSize: 11, color: "#AAA" },
-  cardRight: { alignItems: "center" },
-  bookBtn: {
-    backgroundColor: "#9d0399",
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    alignItems: "center",
-  },
-  bookBtnPrice: { color: "#FFD700", fontSize: 11, fontWeight: "700" },
-  bookBtnText: { color: "#FFF", fontSize: 11, fontWeight: "700" },
+  cardMeta: { fontSize: 12, color: "#6B7280", marginBottom: 4 },
+  ratingRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  reviewCount: { fontSize: 12, color: "#9d0399" },
+  cardRight: { alignItems: "flex-end", gap: 8 },
 
-  // Dropdown
-  dropdown: { paddingHorizontal: 14, paddingBottom: 14 },
+  followBtn: {
+    paddingHorizontal: 4,
+  },
+  followBtnText: { color: "#9d0399", fontSize: 12, fontWeight: "600" },
+
+  // --- SPLIT BOOK BUTTON ---
+  bookBtnWrapper: {
+    backgroundColor: "#9d0399",
+    borderRadius: 8,
+    overflow: "hidden",
+    minWidth: 80,
+  },
+  bookBtnTop: {
+    paddingVertical: 4,
+    alignItems: "center",
+    backgroundColor: "#9d0399",
+  },
+  bookBtnBottom: {
+    paddingVertical: 4,
+    alignItems: "center",
+    backgroundColor: "#eac0e8",
+  },
+  bookBtnText: { color: "#FFF", fontSize: 11, fontWeight: "700" },
+  bookBtnPrice: { color: "#9d0399", fontSize: 11, fontWeight: "700" },
+
+  // --- DROPDOWN (Posts) ---
+  dropdown: { paddingHorizontal: 16, paddingBottom: 16 },
   dropdownDivider: { height: 1, backgroundColor: "#F5F0FF", marginBottom: 12 },
+  dropdownHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
   dropdownTitle: {
     fontSize: 13,
     fontWeight: "700",
     color: "#6B7280",
-    marginBottom: 10,
+  },
+  seeMoreLink: {
+    color: "#9d0399",
+    fontSize: 12,
+    fontWeight: "600",
   },
   noPostsText: {
     fontSize: 13,
@@ -454,108 +460,30 @@ const styles = StyleSheet.create({
     textAlign: "center",
     paddingVertical: 8,
   },
-  postsRow: { gap: 10 },
-  postThumb: {
-    width: 140,
-    height: 140,
+
+  // Vertical posts list (Full width square cards)
+  postsList: {
+    flexDirection: "column",
+    gap: 16,
+  },
+  postSquareCard: {
+    width: "100%",
+    aspectRatio: 1, // Makes it a perfect square
     borderRadius: 12,
-    padding: 10,
+    padding: 16,
     justifyContent: "space-between",
   },
-  postThumbEmoji: { fontSize: 20 },
+  postThumbEmoji: { fontSize: 20, marginBottom: 8 },
   postThumbContent: {
-    fontSize: 11,
+    fontSize: 14,
     color: "#FFF",
-    lineHeight: 16,
-    flex: 1,
-    marginTop: 4,
+    lineHeight: 20,
+    fontWeight: "500",
   },
   postThumbFooter: {
-    fontSize: 9,
+    fontSize: 10,
     color: "rgba(255,255,255,0.7)",
     fontWeight: "600",
     textTransform: "uppercase",
   },
-  viewProfileBtn: {
-    marginTop: 12,
-    alignItems: "center",
-    paddingVertical: 8,
-    borderTopWidth: 1,
-    borderTopColor: "#F5F0FF",
-  },
-  viewProfileText: { color: "#9d0399", fontSize: 13, fontWeight: "700" },
-
-  // Modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.65)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  modalCard: { width: "100%", borderRadius: 20, overflow: "hidden" },
-  postSquare: {
-    width: "100%",
-    aspectRatio: 1,
-    padding: 16,
-    justifyContent: "space-between",
-  },
-  modalPostHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
-  modalAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "rgba(255,255,255,0.2)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  modalAuthorName: { fontSize: 13, fontWeight: "700", color: "#FFF" },
-  modalPostBadge: { fontSize: 10, color: "rgba(255,255,255,0.7)" },
-  modalCloseBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: "rgba(0,0,0,0.25)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  modalPostContent: {
-    fontSize: 15,
-    color: "#FFF",
-    lineHeight: 22,
-    textAlign: "center",
-  },
-  modalPostFooterRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  postLogoRow: { flexDirection: "row", alignItems: "center" },
-  postLogoAstro: { fontSize: 11, fontWeight: "800", color: "#FFF" },
-  postLogoBadge: {
-    backgroundColor: "#FFFFFF30",
-    borderRadius: 3,
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    marginLeft: 2,
-  },
-  postLogoBook: { fontSize: 11, fontWeight: "800", color: "#FFF" },
-  modalPostDate: { fontSize: 10, color: "rgba(255,255,255,0.7)" },
-  modalActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 14,
-    gap: 14,
-    backgroundColor: "#FFF",
-  },
-  modalActionBtn: { flexDirection: "row", alignItems: "center", gap: 4 },
-  modalActionText: { fontSize: 13, color: "#555", fontWeight: "600" },
-  readMoreBtn: {
-    marginLeft: "auto" as any,
-    backgroundColor: "#9d0399",
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-  },
-  readMoreText: { color: "#FFF", fontSize: 12, fontWeight: "700" },
 });

@@ -1,7 +1,7 @@
-import AstroGradient from '@/assets/images/astro-gradient.svg';
-import AstroLogo from '@/assets/images/astro-icon.svg';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import AstroGradient from "@/assets/images/astro-gradient.svg";
+import AstroLogo from "@/assets/images/astro-icon.svg";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Dimensions,
   FlatList,
@@ -11,64 +11,107 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-} from 'react-native';
+} from "react-native";
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 const VIDEOS = [
-  { id: '1', title: 'রাশি অনুযায়ী\nধনতেরাস টিপস!', color: '#4C1D95', emoji: '🎬' },
-  { id: '2', title: 'Mercury\nRetrograde Tips', color: '#1E3A5F', emoji: '🪐' },
-  { id: '3', title: 'Daily\nHoroscope', color: '#1A3320', emoji: '⭐' },
+  {
+    id: "1",
+    title: "রাশি অনুযায়ী\nধনতেরাস টিপস!",
+    color: "#4C1D95",
+    emoji: "🎬",
+  },
+  { id: "2", title: "Mercury\nRetrograde Tips", color: "#1E3A5F", emoji: "🪐" },
+  { id: "3", title: "Daily\nHoroscope", color: "#1A3320", emoji: "⭐" },
 ];
 
 const links = [
-  { label: 'About Us', url: 'https://astrobook-vert.vercel.app/about' },
-  { label: 'Contact Us', url: 'https://astrobook-vert.vercel.app/contact' },
-  { label: 'Policy', url: 'https://astrobook-vert.vercel.app/policy' },
-  { label: 'Blog', url: 'https://astrobook-vert.vercel.app/blog' },
-  { label: 'Help', url: 'https://astrobook-vert.vercel.app/help' },
+  { label: "About Us", url: "https://astrobook-vert.vercel.app/about" },
+  { label: "Contact Us", url: "https://astrobook-vert.vercel.app/contact" },
+  { label: "Policy", url: "https://astrobook-vert.vercel.app/policy" },
+  { label: "Blog", url: "https://astrobook-vert.vercel.app/blog" },
+  { label: "Help", url: "https://astrobook-vert.vercel.app/help" },
 ];
 
-// Mock config
-const MOCK_OTP = '1234';
-const MOCK_IS_NEW_USER = true; // change to false to test existing user flow
+// Mock config — replace with real API
+const MOCK_OTP = "123456";
+const MOCK_IS_NEW_USER = true;
+const RESEND_TIMEOUT = 30; // seconds
 
 export default function OtpScreen() {
   const router = useRouter();
   const { contact } = useLocalSearchParams<{ contact: string }>();
 
-  const [otp, setOtp] = useState('');
+  const [otp, setOtp] = useState("");
   const [verifying, setVerifying] = useState(false);
   const [activeSlide, setActiveSlide] = useState(0);
+  const [timer, setTimer] = useState(RESEND_TIMEOUT);
+  const [canResend, setCanResend] = useState(false);
+
   const inputRef = useRef<TextInput>(null);
   const flatListRef = useRef<FlatList>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     inputRef.current?.focus();
+    startTimer();
+    return () => clearTimer();
   }, []);
+
+  const startTimer = () => {
+    setTimer(RESEND_TIMEOUT);
+    setCanResend(false);
+    clearTimer();
+    timerRef.current = setInterval(() => {
+      setTimer((prev) => {
+        if (prev <= 1) {
+          clearTimer();
+          setCanResend(true);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const clearTimer = () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+  };
 
   // TODO: Replace with real API call
   const handleVerify = () => {
-    if (otp.length !== 4) return;
+    if (otp.length !== 6 || verifying) return;
     setVerifying(true);
-
     setTimeout(() => {
       setVerifying(false);
       if (otp === MOCK_OTP) {
         if (MOCK_IS_NEW_USER) {
-          router.replace('/(auth)/onboarding');
+          router.replace("/(auth)/onboarding");
         } else {
-          // TODO: check role from API response
-          router.replace('/(user)/feed');
+          router.replace("/(user)/feed");
         }
       } else {
-        alert('Wrong OTP! Use ' + MOCK_OTP);
+        alert("Wrong OTP! Use " + MOCK_OTP);
+        setOtp("");
+        inputRef.current?.focus();
       }
     }, 800);
   };
 
+  // TODO: Replace with real resend API call
+  const handleResend = () => {
+    if (!canResend) return;
+    setOtp("");
+    inputRef.current?.focus();
+    startTimer();
+    // Call resend OTP API here
+  };
+
   const onSlideChange = (e: any) => {
-    const index = Math.round(e.nativeEvent.contentOffset.x / (SCREEN_WIDTH * 0.85));
+    const index = Math.round(
+      e.nativeEvent.contentOffset.x / (SCREEN_WIDTH * 0.85),
+    );
     setActiveSlide(index);
   };
 
@@ -79,48 +122,80 @@ export default function OtpScreen() {
 
   return (
     <View style={styles.root}>
-      <AstroGradient width="100%" height="100%" style={StyleSheet.absoluteFill} />
+      <AstroGradient
+        width="100%"
+        height="100%"
+        style={StyleSheet.absoluteFill}
+      />
 
       <View style={styles.container}>
         {/* Card */}
         <View style={styles.card}>
-          <AstroLogo width={220} height={100} />
-
-          <Text style={styles.subtitle}>OTP bheja gaya {contact} pe</Text>
-          <Text style={styles.mockHint}>Mock mode: use "{MOCK_OTP}" as OTP</Text>
-
+          <AstroLogo width={260} height={100} />
+          {/* Contact info */}
+          {/* <Text style={styles.subtitle}>OTP bheja gaya</Text> */}
+          {/* <Text style={styles.contact}>{contact}</Text> */}
           {/* Hidden input */}
           <TextInput
             ref={inputRef}
             value={otp}
             onChangeText={(text) => {
-              if (/^\d*$/.test(text) && text.length <= 4) setOtp(text);
+              if (/^\d*$/.test(text) && text.length <= 6) setOtp(text);
             }}
             keyboardType="number-pad"
-            maxLength={4}
-            style={{ position: 'absolute', opacity: 0 }}
+            maxLength={6}
+            style={{ position: "absolute", opacity: 0, height: 0 }}
           />
-
           {/* OTP Boxes */}
           <TouchableOpacity
             style={styles.otpContainer}
             activeOpacity={1}
             onPress={() => inputRef.current?.focus()}
           >
-            {[...Array(4)].map((_, i) => (
-              <View key={i} style={[styles.otpBox, otp.length === i && styles.otpBoxActive]}>
-                <Text style={styles.otpText}>{otp[i] || ''}</Text>
+            {[...Array(6)].map((_, i) => (
+              <View
+                key={i}
+                style={[
+                  styles.otpBox,
+                  otp[i] ? styles.otpBoxFilled : null,
+                  otp.length === i ? styles.otpBoxActive : null,
+                ]}
+              >
+                <Text style={styles.otpText}>{otp[i] || ""}</Text>
               </View>
             ))}
           </TouchableOpacity>
-
+          {/* Resend */}
+          <View style={styles.resendRow}>
+            {canResend ? (
+              <TouchableOpacity onPress={handleResend}>
+                <Text style={styles.resendActive}>Resend OTP</Text>
+              </TouchableOpacity>
+            ) : (
+              <Text style={styles.resendTimer}>
+                Resend in <Text style={styles.resendTimerBold}>{timer}s</Text>
+              </Text>
+            )}
+          </View>
           {/* Verify Button */}
           <TouchableOpacity
-            style={[styles.submitBtn, (otp.length !== 4 || verifying) && { opacity: 0.5 }]}
-            disabled={otp.length !== 4 || verifying}
+            style={[
+              styles.submitBtn,
+              (otp.length !== 6 || verifying) && styles.submitBtnDisabled,
+            ]}
+            disabled={otp.length !== 6 || verifying}
             onPress={handleVerify}
           >
-            <Text style={styles.submitText}>{verifying ? 'Verifying...' : 'Verify OTP'}</Text>
+            <Text style={styles.submitText}>
+              {verifying ? "Verifying..." : "Verify OTP"}
+            </Text>
+          </TouchableOpacity>
+          {/* Back */}
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => router.back()}
+          >
+            <Text style={styles.backText}>← Change number</Text>
           </TouchableOpacity>
         </View>
 
@@ -156,7 +231,10 @@ export default function OtpScreen() {
           />
           <View style={styles.dotsRow}>
             {VIDEOS.map((_, i) => (
-              <View key={i} style={[styles.dot, i === activeSlide && styles.dotActive]} />
+              <View
+                key={i}
+                style={[styles.dot, i === activeSlide && styles.dotActive]}
+              />
             ))}
           </View>
         </View>
@@ -168,7 +246,9 @@ export default function OtpScreen() {
               <TouchableOpacity onPress={() => openLink(item.url)}>
                 <Text style={styles.footerLink}>{item.label}</Text>
               </TouchableOpacity>
-              {i < links.length - 1 && <Text style={styles.footerSep}> | </Text>}
+              {i < links.length - 1 && (
+                <Text style={styles.footerSep}> | </Text>
+              )}
             </React.Fragment>
           ))}
         </View>
@@ -178,92 +258,138 @@ export default function OtpScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#121943' },
+  root: { flex: 1, backgroundColor: "#121943" },
   container: {
     flex: 1,
     paddingHorizontal: 20,
     paddingTop: 50,
     paddingBottom: 50,
-    flexDirection: 'column',
+    flexDirection: "column",
     gap: 20,
   },
   card: {
-    width: '96%',
-    marginHorizontal: 'auto',
-    backgroundColor: '#FFFFFF',
+    width: "96%",
+    marginHorizontal: "auto",
+    backgroundColor: "#FFFFFF",
     borderRadius: 18,
     borderWidth: 2,
-    borderColor: '#9d0399',
+    borderColor: "#9d0399",
     paddingVertical: 30,
     paddingHorizontal: 20,
-    paddingBottom: 40,
-    alignItems: 'center',
-    marginBottom: 16,
+    paddingBottom: 32,
+    alignItems: "center",
     elevation: 8,
     marginTop: 30,
+    gap: 4,
   },
-  subtitle: { fontSize: 13, color: '#6B6485', marginTop: 8, marginBottom: 4 },
-  mockHint: { fontSize: 11, color: '#9d0399', marginBottom: 20, fontStyle: 'italic' },
+  subtitle: {
+    fontSize: 13,
+    color: "#6B6485",
+    marginTop: 8,
+  },
+  contact: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#1A1A2E",
+    marginBottom: 16,
+  },
   otpContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    width: '80%',
-    marginVertical: 10,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    width: "100%",
+    marginVertical: 12,
+    paddingHorizontal: 4,
   },
   otpBox: {
     width: 52,
     height: 52,
     borderWidth: 2,
-    borderColor: '#D1D5DB',
+    borderColor: "#D1D5DB",
     borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#FAFAFA",
   },
-  otpBoxActive: { borderColor: '#9d0399' },
-  otpText: { fontSize: 24, fontWeight: '600', color: '#1A1A2E' },
+  otpBoxActive: {
+    borderColor: "#9d0399",
+    backgroundColor: "#FAF0FF",
+  },
+  otpBoxFilled: {
+    borderColor: "#9d0399",
+    backgroundColor: "#fff",
+  },
+  otpText: { fontSize: 22, fontWeight: "700", color: "#1A1A2E" },
+  resendRow: {
+    marginTop: 4,
+    marginBottom: 8,
+    height: 24,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  resendTimer: { fontSize: 13, color: "#9CA3AF" },
+  resendTimerBold: { fontWeight: "700", color: "#6B6485" },
+  resendActive: {
+    fontSize: 13,
+    color: "#9d0399",
+    fontWeight: "700",
+    textDecorationLine: "underline",
+  },
   submitBtn: {
-    width: '100%',
-    backgroundColor: '#9d0399',
+    width: "100%",
+    backgroundColor: "#9d0399",
     paddingVertical: 14,
     borderRadius: 10,
-    alignItems: 'center',
-    marginTop: 16,
+    alignItems: "center",
+    marginTop: 8,
   },
-  submitText: { color: '#fff', fontWeight: '700', fontSize: 15 },
-  sliderSection: { width: '100%', marginBottom: 12 },
+  submitBtnDisabled: { opacity: 0.45 },
+  submitText: { color: "#fff", fontWeight: "700", fontSize: 15 },
+  backBtn: { marginTop: 12 },
+  backText: { fontSize: 13, color: "#9d0399" },
+  sliderSection: { width: "100%", marginBottom: 12 },
   sliderContent: { paddingHorizontal: 12, gap: 10 },
   videoCard: {
     width: SCREEN_WIDTH * 0.7,
     height: 200,
     borderRadius: 12,
     padding: 12,
-    justifyContent: 'space-between',
+    justifyContent: "space-between",
     opacity: 0.75,
   },
   videoCardActive: { opacity: 1, transform: [{ scale: 1.03 }] },
   videoEmoji: { fontSize: 22 },
-  videoTitle: { color: '#FFF', fontSize: 11, fontWeight: '600', lineHeight: 16 },
+  videoTitle: {
+    color: "#FFF",
+    fontSize: 11,
+    fontWeight: "600",
+    lineHeight: 16,
+  },
   playBtn: {
-    alignSelf: 'flex-end',
+    alignSelf: "flex-end",
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#FFFFFF30',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#FFFFFF30",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  playIcon: { color: '#FFF', fontSize: 10 },
-  dotsRow: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 30 },
-  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#FFFFFF40' },
-  dotActive: { backgroundColor: '#FFF', width: 20 },
-  footerLinks: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
+  playIcon: { color: "#FFF", fontSize: 10 },
+  dotsRow: {
+    flexDirection: "row",
+    justifyContent: "center",
     gap: 6,
-    alignItems: 'center',
-    marginTop: 'auto',
+    marginTop: 30,
   },
-  footerLink: { color: '#E9D5FF', fontSize: 16 },
-  footerSep: { color: '#C4B5FD', fontSize: 16 },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#FFFFFF40" },
+  dotActive: { backgroundColor: "#FFF", width: 20 },
+  footerLinks: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: 6,
+    alignItems: "center",
+    marginTop: "auto",
+  },
+  footerLink: { color: "#E9D5FF", fontSize: 16 },
+  footerSep: { color: "#C4B5FD", fontSize: 16 },
 });

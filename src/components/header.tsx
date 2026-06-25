@@ -20,8 +20,18 @@ export default function Header() {
             <Feather name="bookmark" size={22} color="#9d0399" />
           </TouchableOpacity>
           {/* Cart */}
-          <TouchableOpacity style={styles.iconBtn}>
+          <TouchableOpacity
+            style={styles.iconBtn}
+            onPress={() => router.push("/(user)/cart")}
+          >
             <Feather name="shopping-cart" size={22} color="#9d0399" />
+          </TouchableOpacity>
+          {/* Search */}
+          <TouchableOpacity
+            style={styles.iconBtn}
+            onPress={() => router.push("/(user)/checkout")}
+          >
+            <Feather name="search" size={22} color="#9d0399" />
           </TouchableOpacity>
         </View>
       </View>

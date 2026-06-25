@@ -1,5 +1,5 @@
 import Header from "@/components/header";
-import { MOCK_BOOKINGS } from "@/mock/data";
+import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
@@ -10,173 +10,252 @@ import {
   View,
 } from "react-native";
 
-const TABS = [
-  { key: "CONFIRMED", label: "Upcoming", color: "#6B21A8", emoji: "📅" },
-  { key: "COMPLETED", label: "Completed", color: "#065F46", emoji: "✅" },
-  { key: "CANCELLED", label: "Cancelled", color: "#991B1B", emoji: "❌" },
-];
+// Mock data — wire karna baad mein API se
+const MOCK_BOOKINGS = {
+  upcoming: [
+    {
+      id: "1",
+      serviceName: "Couples Harmony",
+      astrologerName: "Astro Book",
+      time: "10:00 AM",
+      date: "9th Dec 2025, Tue",
+      emoji: "💑",
+      rating: 4,
+      color: "#4C1D95",
+    },
+    {
+      id: "2",
+      serviceName: "Kundli Analysis",
+      astrologerName: "Pt. Rajesh Sharma",
+      time: "11:30 AM",
+      date: "10th Dec 2025, Wed",
+      emoji: "🔮",
+      rating: 0,
+      color: "#1E3A5F",
+    },
+  ],
+  completed: [
+    {
+      id: "3",
+      serviceName: "Couples Harmony",
+      astrologerName: "Astro Book",
+      time: "10:00 AM",
+      date: "9th Dec 2025, Tue",
+      emoji: "💑",
+      rating: 4,
+      color: "#4C1D95",
+      completedOn: "9th Dec 2025, Tue",
+    },
+  ],
+  cancelled: [],
+};
 
-function formatDate(iso: string) {
-  const d = new Date(iso);
-  return {
-    date: d.toLocaleDateString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    }),
-    time: d.toLocaleTimeString("en-IN", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    }),
-  };
+function StarRating({ rating, size = 14 }: { rating: number; size?: number }) {
+  return (
+    <View style={{ flexDirection: "row", gap: 2 }}>
+      {[1, 2, 3, 4, 5].map((i) => (
+        <Text
+          key={i}
+          style={{ fontSize: size, color: i <= rating ? "#F59E0B" : "#E5E7EB" }}
+        >
+          ★
+        </Text>
+      ))}
+    </View>
+  );
 }
 
-export default function MyBookingsScreen() {
-  const router = useRouter();
-  const [activeTab, setActiveTab] = useState("CONFIRMED");
+type Booking = {
+  id: string;
+  serviceName: string;
+  astrologerName: string;
+  time: string;
+  date: string;
+  emoji: string;
+  rating: number;
+  color: string;
+  completedOn?: string;
+};
 
-  const filtered = MOCK_BOOKINGS.filter((b) => b.status === activeTab);
-  const activeTabInfo = TABS.find((t) => t.key === activeTab)!;
+function BookingCard({
+  item,
+  type,
+}: {
+  item: Booking;
+  type: "upcoming" | "completed" | "cancelled";
+}) {
+  const router = useRouter();
+
+  return (
+    <TouchableOpacity
+      style={styles.bookingCard}
+      activeOpacity={0.88}
+      onPress={() =>
+        router.push({
+          pathname: "/(user)/booking-detail" as any,
+          params: { id: item.id },
+        })
+      }
+    >
+      <View style={styles.cardInner}>
+        {/* Emoji thumbnail */}
+        <View style={[styles.thumbnail, { backgroundColor: item.color }]}>
+          <Text style={{ fontSize: 28 }}>{item.emoji}</Text>
+        </View>
+
+        {/* Info */}
+        <View style={styles.cardInfo}>
+          <View style={styles.cardTopRow}>
+            <Text style={styles.cardTitle} numberOfLines={1}>
+              {item.serviceName}
+            </Text>
+            <Feather name="chevron-right" size={18} color="#9CA3AF" />
+          </View>
+
+          <Text style={styles.cardAstro}>by {item.astrologerName}</Text>
+
+          {type === "completed" && item.completedOn && (
+            <View style={styles.completedBadge}>
+              <Text style={styles.completedBadgeText}>Completed On</Text>
+            </View>
+          )}
+
+          <View style={styles.cardMeta}>
+            <Feather name="clock" size={11} color="#9d0399" />
+            <Text style={styles.cardMetaText}>{item.time}</Text>
+          </View>
+          <View style={styles.cardMeta}>
+            <Feather name="calendar" size={11} color="#9d0399" />
+            <Text style={styles.cardMetaText}>{item.date}</Text>
+          </View>
+
+          {type === "upcoming" && (
+            <TouchableOpacity style={styles.rescheduleRow}>
+              <Text style={styles.rescheduleText}>Reschedule</Text>
+              <Feather name="info" size={11} color="#9d0399" />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
+      {/* Rating row */}
+      <View style={styles.ratingRow}>
+        <StarRating rating={item.rating} />
+        <TouchableOpacity>
+          <Text style={styles.writeReviewText}>Write a review</Text>
+        </TouchableOpacity>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+function SectionBlock({
+  title,
+  count,
+  items,
+  type,
+}: {
+  title: string;
+  count: number;
+  items: Booking[];
+  type: "upcoming" | "completed" | "cancelled";
+}) {
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>
+        {title} <Text style={styles.sectionCount}>({count})</Text>
+      </Text>
+
+      {items.length === 0 ? (
+        <View style={styles.emptyBox}>
+          <Text style={styles.emptyText}>
+            No {title.toLowerCase()} bookings
+          </Text>
+        </View>
+      ) : (
+        items.map((item) => (
+          <BookingCard key={item.id} item={item} type={type} />
+        ))
+      )}
+    </View>
+  );
+}
+
+const TABS = [
+  { key: "consultations", label: "Consultations", enabled: true },
+  { key: "courses", label: "Courses", enabled: false },
+  { key: "products", label: "Products", enabled: false },
+];
+
+export default function MyBookingsScreen() {
+  const [activeTab, setActiveTab] = useState("consultations");
 
   return (
     <View style={styles.root}>
       <Header />
 
-      {/* Tabs */}
-      <View style={styles.tabs}>
-        {TABS.map((tab) => (
-          <TouchableOpacity
-            key={tab.key}
-            style={[
-              styles.tab,
-              activeTab === tab.key && {
-                borderBottomColor: tab.color,
-                borderBottomWidth: 2,
-              },
-            ]}
-            onPress={() => setActiveTab(tab.key)}
-          >
-            <Text
-              style={[
-                styles.tabText,
-                activeTab === tab.key && {
-                  color: tab.color,
-                  fontWeight: "700",
-                },
-              ]}
-            >
-              {tab.emoji} {tab.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
       <ScrollView
-        contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.content}
       >
-        {filtered.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={{ fontSize: 48 }}>📭</Text>
-            <Text style={styles.emptyTitle}>
-              No {activeTabInfo.label} Bookings
-            </Text>
-            <Text style={styles.emptySub}>
-              {activeTab === "CONFIRMED"
-                ? "Book a consultation to get started"
-                : "Your bookings will appear here"}
-            </Text>
-            {activeTab === "CONFIRMED" && (
-              <TouchableOpacity
-                style={styles.browseBtn}
-                onPress={() => router.push("/(user)/explore" as any)}
-              >
-                <Text style={styles.browseBtnText}>Browse Astrologers</Text>
-              </TouchableOpacity>
-            )}
+        {/* Page Title */}
+        <View style={styles.pageTitleRow}>
+          <View style={styles.pageTitleBadge}>
+            <Text style={styles.pageTitleText}>My bookings</Text>
           </View>
-        ) : (
-          filtered.map((booking) => {
-            const { date, time } = formatDate(booking.scheduledAt);
-            return (
-              <View key={booking.id} style={styles.card}>
-                <View
-                  style={[
-                    styles.cardStrip,
-                    { backgroundColor: activeTabInfo.color },
-                  ]}
-                />
-                <View style={styles.cardInner}>
-                  <View style={styles.cardTop}>
-                    <View style={styles.cardEmoji}>
-                      <Text style={{ fontSize: 22 }}>🔮</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.serviceName}>
-                        {booking.serviceName}
-                      </Text>
-                      <Text style={styles.astroName}>
-                        by {booking.astrologerName}
-                      </Text>
-                    </View>
-                    <View
-                      style={[
-                        styles.statusBadge,
-                        { backgroundColor: activeTabInfo.color + "18" },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.statusText,
-                          { color: activeTabInfo.color },
-                        ]}
-                      >
-                        {activeTabInfo.emoji} {activeTabInfo.label}
-                      </Text>
-                    </View>
-                  </View>
+        </View>
 
-                  <View style={styles.chips}>
-                    <View style={styles.chip}>
-                      <Text style={styles.chipText}>📅 {date}</Text>
-                    </View>
-                    <View style={styles.chip}>
-                      <Text style={styles.chipText}>🕐 {time}</Text>
-                    </View>
-                    <View style={styles.chip}>
-                      <Text style={styles.chipText}>
-                        ⏱ {booking.durationMins} min
-                      </Text>
-                    </View>
-                    <View style={styles.chip}>
-                      <Text style={styles.chipText}>
-                        {booking.callType === "VIDEO" ? "📹" : "📞"}{" "}
-                        {booking.callType}
-                      </Text>
-                    </View>
-                  </View>
+        {/* Tabs */}
+        <View style={styles.tabRow}>
+          {TABS.map((tab) => (
+            <TouchableOpacity
+              key={tab.key}
+              style={[
+                styles.tab,
+                activeTab === tab.key && styles.tabActive,
+                !tab.enabled && styles.tabDisabled,
+              ]}
+              onPress={() => tab.enabled && setActiveTab(tab.key)}
+              disabled={!tab.enabled}
+              activeOpacity={tab.enabled ? 0.8 : 1}
+            >
+              <Text
+                style={[
+                  styles.tabText,
+                  activeTab === tab.key && styles.tabTextActive,
+                  !tab.enabled && styles.tabTextDisabled,
+                ]}
+              >
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
-                  <View style={styles.cardBottom}>
-                    <Text style={styles.price}>₹{booking.price}</Text>
-                    {booking.status === "CONFIRMED" && (
-                      <TouchableOpacity style={styles.joinBtn}>
-                        <Text style={styles.joinBtnText}>Join Session →</Text>
-                      </TouchableOpacity>
-                    )}
-                    {booking.status === "COMPLETED" && (
-                      <TouchableOpacity style={styles.reviewBtn}>
-                        <Text style={styles.reviewBtnText}>
-                          Leave Review ⭐
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                </View>
-              </View>
-            );
-          })
+        {/* Content */}
+        {activeTab === "consultations" && (
+          <View>
+            <SectionBlock
+              title="Upcoming"
+              count={MOCK_BOOKINGS.upcoming.length}
+              items={MOCK_BOOKINGS.upcoming}
+              type="upcoming"
+            />
+            <SectionBlock
+              title="Completed"
+              count={MOCK_BOOKINGS.completed.length}
+              items={MOCK_BOOKINGS.completed}
+              type="completed"
+            />
+            <SectionBlock
+              title="Cancelled"
+              count={MOCK_BOOKINGS.cancelled.length}
+              items={MOCK_BOOKINGS.cancelled}
+              type="cancelled"
+            />
+          </View>
         )}
+
         <View style={{ height: 40 }} />
       </ScrollView>
     </View>
@@ -184,89 +263,138 @@ export default function MyBookingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#F5F0FF" },
-  tabs: {
+  root: { flex: 1, backgroundColor: "#F9F5FF" },
+  content: { paddingBottom: 32 },
+
+  pageTitleRow: { paddingHorizontal: 16, paddingTop: 20, marginBottom: 16 },
+  pageTitleBadge: {
+    borderRadius: 8,
+    paddingVertical: 8,
+    alignSelf: "flex-start",
+  },
+  pageTitleText: {
+    color: "#ffffffff",
+    fontSize: 35,
+    fontWeight: "900",
+  },
+
+  // Tabs
+  tabRow: {
     flexDirection: "row",
-    backgroundColor: "#FFF",
     borderBottomWidth: 1,
-    borderBottomColor: "#EDE9FF",
+    borderBottomColor: "#E5E7EB",
+    paddingHorizontal: 16,
+    marginBottom: 8,
   },
   tab: {
     flex: 1,
-    paddingVertical: 14,
+    paddingVertical: 10,
     alignItems: "center",
     borderBottomWidth: 2,
     borderBottomColor: "transparent",
   },
-  tabText: { fontSize: 12, color: "#888", fontWeight: "500" },
-  content: { padding: 16, gap: 12 },
-  emptyState: { alignItems: "center", paddingTop: 60, gap: 8 },
-  emptyTitle: { fontSize: 16, fontWeight: "800", color: "#1A1A2E" },
-  emptySub: { fontSize: 13, color: "#AAA", textAlign: "center" },
-  browseBtn: {
-    marginTop: 16,
-    backgroundColor: "#9d0399",
-    borderRadius: 12,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
+  tabActive: { borderBottomColor: "#9d0399" },
+  tabDisabled: { opacity: 0.4 },
+  tabText: { fontSize: 13, fontWeight: "600", color: "#6B7280" },
+  tabTextActive: { color: "#9d0399" },
+  tabTextDisabled: { color: "#9CA3AF" },
+
+  // Section
+  section: { paddingHorizontal: 16, paddingTop: 20 },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#9d0399",
+    marginBottom: 12,
   },
-  browseBtnText: { color: "#FFF", fontWeight: "700", fontSize: 14 },
-  card: {
+  sectionCount: { color: "#9d0399", fontWeight: "700" },
+
+  emptyBox: {
     backgroundColor: "#FFF",
-    borderRadius: 14,
+    borderRadius: 12,
+    padding: 20,
+    alignItems: "center",
     borderWidth: 1,
     borderColor: "#EDE9FF",
-    overflow: "hidden",
-    flexDirection: "row",
-    elevation: 1,
   },
-  cardStrip: { width: 5 },
-  cardInner: { flex: 1, padding: 14, gap: 10 },
-  cardTop: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
-  cardEmoji: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: "#F3E8FF",
+  emptyText: { fontSize: 13, color: "#9CA3AF" },
+
+  // Booking Card
+  bookingCard: {
+    backgroundColor: "#FFF",
+    borderRadius: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#EDE9FF",
+    elevation: 2,
+    overflow: "hidden",
+  },
+  cardInner: {
+    flexDirection: "row",
+    padding: 12,
+    gap: 12,
+  },
+  thumbnail: {
+    width: 72,
+    height: 72,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
+    flexShrink: 0,
   },
-  serviceName: { fontSize: 14, fontWeight: "800", color: "#1A1A2E" },
-  astroName: {
-    fontSize: 12,
-    color: "#9d0399",
-    fontWeight: "600",
-    marginTop: 1,
+  cardInfo: { flex: 1 },
+  cardTopRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 2,
   },
-  statusBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
-  statusText: { fontSize: 10, fontWeight: "700" },
-  chips: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
-  chip: {
-    backgroundColor: "#F5F0FF",
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+  cardTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#1A1A2E",
+    flex: 1,
   },
-  chipText: { fontSize: 11, color: "#6B21A8", fontWeight: "600" },
-  cardBottom: {
+  cardAstro: { fontSize: 12, color: "#6B7280", marginBottom: 4 },
+  completedBadge: {
+    backgroundColor: "#DCFCE7",
+    borderRadius: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    alignSelf: "flex-start",
+    marginBottom: 4,
+  },
+  completedBadgeText: { fontSize: 10, color: "#15803D", fontWeight: "700" },
+  cardMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginBottom: 2,
+  },
+  cardMetaText: { fontSize: 11, color: "#6B7280" },
+  rescheduleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 2,
+  },
+  rescheduleText: { fontSize: 11, color: "#9d0399", fontWeight: "600" },
+
+  // Rating row
+  ratingRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#F3F4F6",
+    backgroundColor: "#FAFAFA",
   },
-  price: { fontSize: 16, fontWeight: "800", color: "#9d0399" },
-  joinBtn: {
-    backgroundColor: "#065F46",
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+  writeReviewText: {
+    fontSize: 12,
+    color: "#9d0399",
+    fontWeight: "600",
+    textDecorationLine: "underline",
   },
-  joinBtnText: { color: "#FFF", fontSize: 12, fontWeight: "800" },
-  reviewBtn: {
-    borderWidth: 1.5,
-    borderColor: "#9d0399",
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-  },
-  reviewBtnText: { color: "#9d0399", fontSize: 11, fontWeight: "700" },
 });

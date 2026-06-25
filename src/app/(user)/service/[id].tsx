@@ -1,3 +1,4 @@
+import Header from "@/components/header";
 import { MOCK_ASTROLOGERS, MOCK_SERVICES } from "@/mock/data";
 import { Feather } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -37,19 +38,45 @@ const MOCK_REVIEWS = [
       "Suprio ji is very knowledgeable and patient. The session was very detailed and eye-opening.",
     date: "05 Nov 2025",
   },
+  // Nested Comment Example (Aap API ke through ise render karna)
+  // {
+  //   id: "4",
+  //   name: "Suprio Karmakar",
+  //   isReply: true,
+  //   rating: 0,
+  //   comment: "Thank you Abhishek! I'm glad I could help.",
+  //   date: "16 Nov 2025",
+  // },
 ];
 
-function StarRating({ rating, size = 14 }: { rating: number; size?: number }) {
+// Updated StarRating with Purple filled stars and Grey empty stars
+function StarRating({
+  rating,
+  size = 14,
+  showNumber = false,
+}: {
+  rating: number;
+  size?: number;
+  showNumber?: boolean;
+}) {
   return (
-    <View style={{ flexDirection: "row", gap: 2 }}>
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
       {[1, 2, 3, 4, 5].map((i) => (
         <Text
           key={i}
-          style={{ fontSize: size, color: i <= rating ? "#F59E0B" : "#DDD" }}
+          style={{
+            fontSize: size,
+            color: i <= Math.floor(rating) ? "#9d0399" : "#E5E7EB",
+          }}
         >
           ★
         </Text>
       ))}
+      {showNumber && (
+        <Text style={{ fontSize: size - 2, color: "#6B7280", marginLeft: 6 }}>
+          {rating}
+        </Text>
+      )}
     </View>
   );
 }
@@ -71,142 +98,116 @@ export default function ServiceDetailScreen() {
 
   return (
     <View style={styles.root}>
+      <Header />
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 100 }}
       >
-        {/* Hero Banner */}
-        <View style={[styles.hero, { backgroundColor: astrologer.color }]}>
-          <TouchableOpacity
-            style={styles.backBtn}
-            onPress={() => router.back()}
-          >
-            <Feather name="arrow-left" size={22} color="#FFF" />
-          </TouchableOpacity>
-          <Text style={styles.heroEmoji}>{astrologer.emoji}</Text>
-          <Text style={styles.heroServiceName}>{service.name}</Text>
-          <View style={styles.heroChips}>
-            <View style={styles.heroChip}>
-              <Text style={styles.heroChipText}>
-                ⏱ {service.durationMins} min
-              </Text>
-            </View>
-            <View style={styles.heroChip}>
-              <Text style={styles.heroChipText}>
-                {service.callType === "VIDEO" ? "📹 Video" : "📞 Voice"}
-              </Text>
-            </View>
-          </View>
-        </View>
+        {/* --- 1. HERO BANNER --- */}
 
-        {/* Astrologer Info */}
-        <View style={styles.astroCard}>
-          <Text style={styles.bookWith}>Book consultation with</Text>
-          <TouchableOpacity
-            style={styles.astroRow}
-            onPress={() =>
-              router.push({
-                pathname: "/(user)/astrologer-profile" as any,
-                params: { id: astrologer.id },
-              })
-            }
-          >
-            <View
-              style={[
-                styles.astroAvatar,
-                { backgroundColor: astrologer.color },
-              ]}
+        <View
+          style={{
+            backgroundColor: "#fff1feff",
+            marginHorizontal: 20,
+            borderRadius: 20,
+            marginTop: 30,
+          }}
+        >
+          <View style={[styles.heroContainer]}>
+            <TouchableOpacity
+              style={styles.backBtn}
+              onPress={() => router.back()}
             >
-              <Text style={{ fontSize: 24 }}>{astrologer.emoji}</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.astroName}>{astrologer.name}</Text>
-              <Text style={styles.astroSpeciality}>
-                {astrologer.speciality} · {astrologer.experience}
-              </Text>
-            </View>
-            <Feather name="chevron-right" size={18} color="#CCC" />
-          </TouchableOpacity>
-          <Text style={styles.astroDesc} numberOfLines={3}>
-            {astrologer.bio}
-          </Text>
-        </View>
+              <Feather name="arrow-left" size={22} color="#1F2937" />
+            </TouchableOpacity>
 
-        {/* Reviews Summary */}
-        <View style={styles.reviewsSummary}>
-          <Text style={styles.sectionTitle}>Customer Reviews</Text>
-          <View style={styles.ratingRow}>
-            <Text style={styles.ratingBig}>{avgRating}</Text>
-            <View>
-              <StarRating rating={Math.round(avgRating)} size={18} />
-              <Text style={styles.ratingCount}>
-                {totalReviews.toLocaleString()} reviews
-              </Text>
-            </View>
+            <View style={styles.heroContentRow}></View>
           </View>
 
-          {/* Review Cards */}
-          {MOCK_REVIEWS.map((review) => (
-            <View key={review.id} style={styles.reviewCard}>
-              <View style={styles.reviewHeader}>
-                <View style={styles.reviewAvatar}>
-                  <Text style={styles.reviewAvatarText}>{review.name[0]}</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.reviewerName}>{review.name}</Text>
-                  <StarRating rating={review.rating} size={12} />
-                </View>
-                <Text style={styles.reviewDate}>{review.date}</Text>
-              </View>
-              <Text style={styles.reviewComment}>{review.comment}</Text>
-            </View>
-          ))}
-        </View>
-
-        {/* About Service */}
-        <View style={styles.aboutSection}>
-          <Text style={styles.sectionTitle}>About this Service</Text>
-          <Text style={styles.aboutDesc}>{service.description}</Text>
-
-          {/* What you'll get */}
-          <View style={styles.benefitsList}>
-            {[
-              "Personalized reading based on your birth details",
-              "Detailed analysis of planetary positions",
-              "Career, relationship and health insights",
-              "Remedies and solutions for challenges",
-              "Q&A session to address your concerns",
-              "Recording of the session (on request)",
-            ].map((benefit, index) => (
-              <View key={index} style={styles.benefitRow}>
-                <Text style={styles.benefitDot}>•</Text>
-                <Text style={styles.benefitText}>{benefit}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-
-        {/* Footer Links */}
-        <View style={styles.footerLinks}>
-          {["About Us", "Contact Us", "Policy", "Blog", "Help"].map(
-            (link, i, arr) => (
-              <View
-                key={link}
-                style={{ flexDirection: "row", alignItems: "center" }}
+          {/* --- 2. ASTROLOGER INFO CARD --- */}
+          <View style={styles.astroCard}>
+            <Text style={styles.bookWith}>
+              Book consultation with{" "}
+              <Text
+                style={{ color: "#1F2937", fontWeight: "600", fontSize: 20 }}
               >
-                <TouchableOpacity>
-                  <Text style={styles.footerLink}>{link}</Text>
-                </TouchableOpacity>
-                {i < arr.length - 1 && (
-                  <Text style={styles.footerSep}> | </Text>
-                )}
+                {astrologer.name}
+              </Text>
+            </Text>
+
+            <Text style={styles.astroDesc} numberOfLines={3}>
+              {astrologer.bio}
+            </Text>
+          </View>
+
+          {/* --- 3. CUSTOMER REVIEWS SECTION (EXACT MATCH) --- */}
+          <View style={styles.reviewsSummary}>
+            <Text style={styles.sectionTitle}>Customer Reviews</Text>
+
+            {/* Rating Summary */}
+            <View style={styles.ratingRow}>
+              <Text style={styles.ratingBig}>{avgRating}</Text>
+              <View style={{ gap: 2 }}>
+                <StarRating rating={Math.round(avgRating)} size={20} />
+                <Text style={styles.ratingCount}>
+                  {totalReviews.toLocaleString()} reviews
+                </Text>
               </View>
-            ),
-          )}
+            </View>
+
+            {/* Review Cards */}
+            <View style={styles.reviewCardsContainer}>
+              {MOCK_REVIEWS.map((review, index) => (
+                <View key={review.id}>
+                  <View style={styles.reviewCard}>
+                    <View style={styles.reviewHeader}>
+                      <View style={styles.reviewAvatar}>
+                        <Text style={styles.reviewAvatarText}>
+                          {review.name[0]}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1, marginLeft: 10 }}>
+                        <Text style={styles.reviewerName}>{review.name}</Text>
+                        <StarRating rating={review.rating} size={13} />
+                      </View>
+                      <Text style={styles.reviewDate}>{review.date}</Text>
+                    </View>
+                    <Text style={styles.reviewComment}>{review.comment}</Text>
+                  </View>
+
+                  {/* Future Implementation for Nested Replies (Space left here) */}
+                  {/* {review.id === "1" && (
+                   <View style={styles.nestedReply}>
+                      ... Reply Component ...
+                   </View>
+                )} */}
+                </View>
+              ))}
+            </View>
+          </View>
+
+          {/* --- 4. ABOUT THIS SERVICE --- */}
+          <View style={styles.aboutSection}>
+            <Text style={styles.sectionTitle}>About this Service</Text>
+
+            <View style={styles.benefitsList}>
+              {[
+                "Lorem ipsum dolor sit amet, consectetuer adipiscing elit, sed diam nonummy nibh.",
+                "Lorem ipsum dolor sit amet, consectetuer adipiscing elit, sed diam nonummy nibh.",
+                "Lorem ipsum dolor sit amet, consectetuer adipiscing elit, sed diam nonummy nibh.",
+                "Lorem ipsum dolor sit amet, consectetuer adipiscing elit, sed diam nonummy nibh.",
+              ].map((benefit, index) => (
+                <View key={index} style={styles.benefitRow}>
+                  <Text style={styles.benefitDot}>•</Text>
+                  <Text style={styles.benefitText}>{benefit}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
         </View>
       </ScrollView>
 
-      {/* Sticky Bottom Bar */}
+      {/* --- 6. STICKY BOTTOM BAR --- */}
       <View style={styles.bottomBar}>
         <View>
           <Text style={styles.priceLabel}>Price</Text>
@@ -215,9 +216,13 @@ export default function ServiceDetailScreen() {
         <View style={styles.bottomActions}>
           <TouchableOpacity
             style={styles.cartBtn}
-            onPress={() => alert("Added to cart!")}
+            onPress={() =>
+              router.push({
+                pathname: "/(user)/cart" as any,
+                params: { astroId: astrologer.id, serviceId: service.id },
+              })
+            }
           >
-            <Feather name="shopping-cart" size={15} color="#9d0399" />
             <Text style={styles.cartBtnText}>Add to Cart</Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -234,60 +239,68 @@ export default function ServiceDetailScreen() {
         </View>
       </View>
     </View>
-  );
+  );    
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#F9F5FF" },
 
-  // Hero
-  hero: {
-    paddingTop: 60,
-    paddingBottom: 28,
+  // --- HERO ---
+  heroContainer: {
+    paddingTop: 20,
+    paddingBottom: 20,
     paddingHorizontal: 20,
-    alignItems: "center",
-    gap: 10,
+    // backgroundColor: "#F9F5FF",
   },
   backBtn: {
     position: "absolute",
-    top: 60,
-    left: 16,
+    top: 45,
+    left: 30,
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "rgba(0,0,0,0.2)",
+    backgroundColor: "#FFF",
     alignItems: "center",
     justifyContent: "center",
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    zIndex: 9,
   },
-  heroEmoji: { fontSize: 52, marginBottom: 4 },
-  heroServiceName: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: "#FFF",
+  heroContentRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 10,
+    height: 300,
+    backgroundColor: "#059669",
+    width: "100%",
+    borderRadius: 16,
+  },
+  heroTextColumn: {
+    flex: 1,
+  },
+
+  // --- ASTROLOGER INFO CARD ---
+  astroCard: {
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  bookWith: {
+    fontSize: 18,
+    fontWeight: "500",
+    color: "#1F2937",
     textAlign: "center",
   },
-  heroChips: { flexDirection: "row", gap: 8, marginTop: 4 },
-  heroChip: {
-    backgroundColor: "rgba(255,255,255,0.2)",
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
+  astroRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginTop: 4,
   },
-  heroChipText: { color: "#FFF", fontSize: 12, fontWeight: "600" },
-
-  // Astro Card
-  astroCard: {
-    backgroundColor: "#FFF",
-    margin: 16,
-    borderRadius: 16,
-    padding: 16,
-    gap: 10,
-    borderWidth: 1,
-    borderColor: "#EDE9FF",
-    elevation: 2,
-  },
-  bookWith: { fontSize: 12, color: "#9CA3AF", fontWeight: "500" },
-  astroRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   astroAvatar: {
     width: 48,
     height: 48,
@@ -298,76 +311,103 @@ const styles = StyleSheet.create({
   astroName: { fontSize: 16, fontWeight: "800", color: "#1A1A2E" },
   astroSpeciality: {
     fontSize: 12,
-    color: "#9d0399",
-    fontWeight: "600",
+    color: "#6B7280",
+    fontWeight: "500",
     marginTop: 2,
   },
-  astroDesc: { fontSize: 13, color: "#6B7280", lineHeight: 20 },
+  astroDesc: {
+    fontSize: 14,
+    color: "#6B7280",
+    lineHeight: 20,
+    textAlign: "center",
+  },
 
-  // Reviews
-  reviewsSummary: { paddingHorizontal: 16, paddingBottom: 8, gap: 12 },
+  // --- CUSTOMER REVIEWS ---
+  reviewsSummary: {
+    marginTop: 16,
+    paddingHorizontal: 16,
+    gap: 12,
+  },
   sectionTitle: {
-    fontSize: 17,
-    fontWeight: "800",
-    color: "#1A1A2E",
-    marginBottom: 4,
+    fontSize: 25,
+    fontWeight: "700",
+    color: "#1F2937",
   },
   ratingRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 16,
-    marginBottom: 4,
+    gap: 10,
+    marginBottom: 8,
   },
-  ratingBig: { fontSize: 42, fontWeight: "800", color: "#1A1A2E" },
+  ratingBig: {
+    fontSize: 44,
+    fontWeight: "800",
+    color: "#6B21A8",
+  },
   ratingCount: { fontSize: 12, color: "#9CA3AF", marginTop: 4 },
+
+  // Review Cards Container
+  reviewCardsContainer: {
+    gap: 12,
+  },
   reviewCard: {
     backgroundColor: "#FFF",
-    borderRadius: 14,
+    borderRadius: 12,
     padding: 14,
     borderWidth: 1,
     borderColor: "#EDE9FF",
     gap: 8,
   },
-  reviewHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
+  reviewHeader: { flexDirection: "row", alignItems: "center" },
   reviewAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: "#F3E8FF",
     alignItems: "center",
     justifyContent: "center",
   },
-  reviewAvatarText: { fontSize: 16, fontWeight: "700", color: "#9d0399" },
+  reviewAvatarText: { fontSize: 14, fontWeight: "700", color: "#9d0399" },
   reviewerName: {
     fontSize: 13,
-    fontWeight: "700",
-    color: "#1A1A2E",
+    fontWeight: "600",
+    color: "#1F2937",
     marginBottom: 2,
   },
-  reviewDate: { fontSize: 11, color: "#9CA3AF" },
-  reviewComment: { fontSize: 13, color: "#555", lineHeight: 19 },
+  reviewDate: { fontSize: 11, color: "#9CA3AF", marginLeft: "auto" },
+  reviewComment: {
+    fontSize: 13,
+    color: "#4B5563",
+    lineHeight: 19,
+    marginTop: 2,
+  },
 
-  // About
-  aboutSection: { paddingHorizontal: 16, paddingTop: 16, gap: 10 },
-  aboutDesc: { fontSize: 14, color: "#555", lineHeight: 22 },
-  benefitsList: { gap: 8, marginTop: 4 },
+  // --- ABOUT THIS SERVICE ---
+  aboutSection: {
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    gap: 12,
+    paddingBottom: 20,
+  },
+  benefitsList: { gap: 10, marginTop: 6 },
   benefitRow: { flexDirection: "row", gap: 8, alignItems: "flex-start" },
-  benefitDot: { fontSize: 16, color: "#9d0399", lineHeight: 22 },
-  benefitText: { fontSize: 13, color: "#555", lineHeight: 22, flex: 1 },
+  benefitDot: { fontSize: 18, color: "#9d0399", lineHeight: 22 },
+  benefitText: { fontSize: 13, color: "#4B5563", lineHeight: 22, flex: 1 },
 
-  // Footer
+  // --- FOOTER LINKS ---
   footerLinks: {
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "center",
     paddingHorizontal: 16,
-    paddingVertical: 20,
+    paddingVertical: 24,
     gap: 4,
+    backgroundColor: "#F9F5FF",
   },
-  footerLink: { fontSize: 12, color: "#9CA3AF" },
-  footerSep: { fontSize: 12, color: "#DDD" },
+  footerLink: { fontSize: 12, color: "#6B7280", fontWeight: "500" },
+  footerSep: { fontSize: 12, color: "#D1D5DB" },
 
-  // Bottom Bar
+  // --- BOTTOM STICKY BAR ---
   bottomBar: {
     position: "absolute",
     bottom: 0,
@@ -382,26 +422,30 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "#EDE9FF",
     elevation: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
   },
-  priceLabel: { fontSize: 11, color: "#9CA3AF" },
-  price: { fontSize: 22, fontWeight: "800", color: "#9d0399" },
+  priceLabel: { fontSize: 12, color: "#6B7280", fontWeight: "500" },
+  price: { fontSize: 22, fontWeight: "700", color: "#6B21A8" },
   bottomActions: { flexDirection: "row", gap: 10 },
   cartBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    justifyContent: "center",
     borderWidth: 1.5,
     borderColor: "#9d0399",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
   cartBtnText: { color: "#9d0399", fontSize: 13, fontWeight: "700" },
   bookBtn: {
     backgroundColor: "#9d0399",
-    borderRadius: 12,
+    borderRadius: 8,
     paddingHorizontal: 20,
-    paddingVertical: 11,
+    paddingVertical: 12,
   },
-  bookBtnText: { color: "#FFF", fontSize: 13, fontWeight: "800" },
+  bookBtnText: { color: "#FFF", fontSize: 13, fontWeight: "700" },
 });
