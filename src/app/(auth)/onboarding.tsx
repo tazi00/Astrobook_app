@@ -1,4 +1,5 @@
 import AstroGradient from "@/assets/images/astro-gradient.svg";
+import { useOnboarding } from "@/features/auth/hooks/useAuth";
 import AstroLogo from "@/assets/images/logo-white.svg";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useRouter } from "expo-router";
@@ -37,7 +38,7 @@ export default function OnboardingScreen() {
   const [dob, setDob] = useState<Date | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
-  const [loading, setLoading] = useState(false);
+  const { onboard, loading } = useOnboarding();
 
   const toggleInterest = (item: string) => {
     setSelected((prev) =>
@@ -57,17 +58,13 @@ export default function OnboardingScreen() {
     if (selectedDate) setDob(selectedDate);
   };
 
-  const handleComplete = () => {
-    if (!name.trim()) {
-      Alert.alert("Required", "Apna naam daalo");
-      return;
-    }
-    setLoading(true);
-    // TODO: Replace with real API call
-    setTimeout(() => {
-      setLoading(false);
-      router.replace("/(user)/feed" as any);
-    }, 800);
+  const handleComplete = async () => {
+    await onboard({
+      name,
+      email: email.trim() || undefined,
+      dateOfBirth: dob ? dob.toISOString().split("T")[0] : undefined,
+      interests: selected.length > 0 ? selected : undefined,
+    });
   };
 
   return (
@@ -356,3 +353,4 @@ const styles = StyleSheet.create({
   skipBtn: { alignItems: "center", paddingVertical: 10 },
   skipText: { color: "#C4B5FD", fontSize: 14 },
 });
+

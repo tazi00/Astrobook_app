@@ -1,4 +1,6 @@
 import AstroGradient from "@/assets/images/astro-gradient.svg";
+import { Alert } from "react-native";
+import { useOtpLogin } from "@/features/auth/hooks/useAuth";
 import AstroLogo from "@/assets/images/astro-icon.svg";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
@@ -34,17 +36,14 @@ const links = [
   { label: "Help", url: "https://astrobook-vert.vercel.app/help" },
 ];
 
-// Mock config — replace with real API
-const MOCK_OTP = "123456";
-const MOCK_IS_NEW_USER = true;
-const RESEND_TIMEOUT = 30; // seconds
+const RESEND_TIMEOUT = 30;
 
 export default function OtpScreen() {
   const router = useRouter();
   const { contact } = useLocalSearchParams<{ contact: string }>();
 
   const [otp, setOtp] = useState("");
-  const [verifying, setVerifying] = useState(false);
+  const { verifyOtp, resendOtp, verifying } = useOtpLogin();
   const [activeSlide, setActiveSlide] = useState(0);
   const [timer, setTimer] = useState(RESEND_TIMEOUT);
   const [canResend, setCanResend] = useState(false);
@@ -79,33 +78,22 @@ export default function OtpScreen() {
     if (timerRef.current) clearInterval(timerRef.current);
   };
 
-  // TODO: Replace with real API call
-  const handleVerify = () => {
+  const handleVerify = async () => {
     if (otp.length !== 6 || verifying) return;
-    setVerifying(true);
-    setTimeout(() => {
-      setVerifying(false);
-      if (otp === MOCK_OTP) {
-        if (MOCK_IS_NEW_USER) {
-          router.replace("/(auth)/onboarding");
-        } else {
-          router.replace("/(user)/feed");
-        }
-      } else {
-        alert("Wrong OTP! Use " + MOCK_OTP);
-        setOtp("");
-        inputRef.current?.focus();
-      }
-    }, 800);
+    try {
+      await verifyOtp(contact, otp);
+    } catch {
+      setOtp("");
+      inputRef.current?.focus();
+    }
   };
 
-  // TODO: Replace with real resend API call
-  const handleResend = () => {
+  const handleResend = async () => {
     if (!canResend) return;
+    await resendOtp(contact);
     setOtp("");
     inputRef.current?.focus();
     startTimer();
-    // Call resend OTP API here
   };
 
   const onSlideChange = (e: any) => {
@@ -393,3 +381,4 @@ const styles = StyleSheet.create({
   footerLink: { color: "#E9D5FF", fontSize: 16 },
   footerSep: { color: "#C4B5FD", fontSize: 16 },
 });
+

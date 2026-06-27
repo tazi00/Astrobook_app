@@ -11,7 +11,7 @@
 
 - **Platform:** React Native + Expo (Dev Client) — iOS & Android
 - **Team:** Inevelop Ventures
-- **Version:** MVP 2.0 — Fresh Start
+- **Version:** MVP 2.0
 
 ---
 
@@ -43,6 +43,8 @@ Role is stored in JWT. Navigation changes based on role.
 | File Storage | Cloudinary |
 | Job Scheduling | BullMQ + Redis |
 | Notifications | Expo Push Notifications |
+| Server State | React Query |
+| Global State | Zustand |
 | Cart Storage | AsyncStorage (local, no backend cart table) |
 
 ---
@@ -68,20 +70,21 @@ src/
 │   │   ├── astrologer.ts
 │   │   ├── service.ts
 │   │   ├── availability.ts
+│   │   ├── otp-verification.ts   ← OTP PostgreSQL mein (Redis nahi)
 │   │   ├── booking.ts
 │   │   ├── payment.ts
 │   │   ├── session.ts
 │   │   ├── message.ts
 │   │   ├── post.ts
 │   │   └── review.ts
-│   ├── index.ts           ← DB connection + export all schemas
+│   ├── index.ts
 │   └── migrations/
 ├── modules/
 │   ├── auth/
 │   │   ├── auth.routes.ts
 │   │   ├── auth.controller.ts
 │   │   ├── auth.service.ts
-│   │   └── auth.schema.ts     ← Zod/Fastify validation schema
+│   │   └── auth.schema.ts
 │   ├── astrologer/
 │   ├── service/
 │   ├── slot/
@@ -104,8 +107,8 @@ src/
 │   └── types/
 ├── config/
 │   └── env.ts
-├── app.ts                 ← Fastify instance, register plugins + routes
-└── server.ts              ← Entry point, listen
+├── app.ts
+└── server.ts
 ```
 
 ### Backend Conventions
@@ -120,6 +123,7 @@ src/
 - All IDs are UUIDs
 - Timestamps use `defaultNow()` in Drizzle
 - Enums defined in `db/schema/` and reused across modules
+- OTP stored in PostgreSQL (`otp_verifications` table) — Redis NOT used
 
 ---
 
@@ -127,63 +131,126 @@ src/
 
 ```
 src/
-├── features/
+├── app/                        ← Expo Router (routing only — no logic here)
+│
+├── features/                   ← Feature-first — each feature is self-contained
 │   ├── auth/
 │   │   ├── screens/
 │   │   ├── components/
 │   │   ├── hooks/
-│   │   └── api/
-│   ├── feed/              ← Home feed — astrologer posts
-│   ├── explore/           ← Browse astrologers
-│   ├── astrologer/        ← Astrologer profile + services
-│   ├── booking/           ← Service detail, slot selection, cart, checkout
-│   ├── session/           ← Video/voice call + RTM chat
-│   ├── my-bookings/       ← Upcoming / Completed / Cancelled
-│   ├── review/            ← Rating + review after session
-│   └── posts/             ← Create/manage posts (astrologer only)
-├── shared/
-│   ├── components/        ← Reusable UI components
-│   ├── hooks/             ← Shared hooks
-│   ├── utils/             ← Helpers, formatters, date utils
-│   ├── types/             ← Global TypeScript types
-│   └── api/               ← Axios instance + interceptors
-├── navigation/
-│   ├── UserNavigator.tsx
-│   ├── AstrologerNavigator.tsx
-│   └── RootNavigator.tsx
-└── store/
-    ├── auth.store.ts      ← Zustand — auth state, JWT
-    └── cart.store.ts      ← Zustand — cart items (persisted to AsyncStorage)
+│   │   ├── services/           ← AuthService class
+│   │   ├── store/              ← Auth-local state only (form state etc)
+│   │   ├── types/
+│   │   ├── schema/             ← Zod validation for auth forms
+│   │   └── utils/
+│   ├── astrologers/
+│   ├── feed/
+│   ├── booking/
+│   ├── payment/
+│   ├── consultancy/
+│   ├── profile/
+│   ├── session/
+│   ├── review/
+│   └── report/
+│
+├── components/                 ← Global shared UI components only
+│
+├── constants/                  ← App-wide constants (routes, keys, etc.)
+│
+├── hooks/                      ← Global hooks used across features
+│
+├── lib/                        ← Library initializations
+│   ├── query-client.ts         ← React Query client setup
+│   └── axios.ts                ← (re-exports from services/api/client)
+│
+├── services/                   ← Global services
+│   ├── api/
+│   │   └── client.ts           ← Axios instance + interceptors (singleton)
+│   └── storage/
+│       └── index.ts            ← Typed AsyncStorage wrapper
+│
+├── store/                      ← Truly global Zustand stores (2+ features use)
+│   ├── auth.store.ts           ← isLoggedIn, user, role, tokens
+│   └── cart.store.ts           ← Cart items (AsyncStorage persisted)
+│
+├── mocks/                      ← Mock data + mock service implementations
+│   ├── astrologers.mock.ts
+│   ├── services.mock.ts
+│   ├── bookings.mock.ts
+│   ├── posts.mock.ts
+│   └── auth.mock.ts
+│
+├── utils/                      ← Global helpers (formatters, date, string)
+├── types/                      ← Global TypeScript types + API contracts
+├── theme/                      ← Colors, spacing, fonts, shadows
+└── schema/                     ← Shared Zod schemas (frontend + backend shared)
 ```
 
 ### Frontend Conventions
 
+- `app/` folder mein sirf routing — zero logic
 - Feature-based — each feature is self-contained
-- Screens go in `features/<name>/screens/`
-- Reusable components only in `shared/components/`
-- API calls go in `features/<name>/api/` — no direct axios calls in screens
-- Use React Query for all server state — no manual loading states
-- Use Zustand for global client state (auth, cart)
-- Cart is stored locally in AsyncStorage — no backend cart table
-- Navigation is role-based — `RootNavigator` checks role from auth store
+- **Service layer is class-based** — `new AstrologerService()`, exported as singleton
+- All services extend/use `apiClient` from `services/api/client.ts`
+- API calls go in `features/<name>/services/` — no direct axios calls in screens
+- React Query for all server state — no manual loading/error states in screens
+- Zustand for global client state — auth, cart only
+- Feature-local state in `features/<name>/store/` — form state, UI state
+- Mock data shape = exact backend response shape — **contract-first**
+- Cart stored locally in AsyncStorage — no backend cart table
+- Google Login deferred — OTP flow first, Dev Client required
+
+### Service Layer Pattern
+
+Every feature has a class-based service:
+
+```ts
+// features/astrologers/services/astrologer.service.ts
+class AstrologerService {
+  private readonly base = '/astrologers';
+  async getAll(filters?) { ... }
+  async getById(id: string) { ... }
+  async getAvailability(id: string, date: string) { ... }
+}
+export const astrologerService = new AstrologerService();
+```
+
+Chain: `Screen → Hook (React Query) → Service Class → apiClient → Backend`
+
+### Mock → Real API Swap Strategy
+
+Mock phase mein service returns mock data. Real API phase mein sirf service internals change hote hain — screens/hooks same rehte hain:
+
+```ts
+// MOCK phase
+async getAll() {
+  return MOCK_ASTROLOGERS;
+}
+
+// REAL phase
+async getAll() {
+  const res = await apiClient.get(this.base);
+  return res.data.data;
+}
+```
 
 ---
 
 ## Database Schema Summary
 
-All schemas defined in `apps/server/src/db/schema/` — central location.
-
 | Table | Key Fields |
 |---|---|
-| `users` | id, name, email, phone, role, google_id |
+| `users` | id, name, email, phone, role, google_id, is_onboarded |
 | `astrologer_profiles` | user_id, bio, experience_years, languages[], specializations[], rating, photo_url |
+| `otp_verifications` | id, phone, otp_hash, expires_at, attempts, created_at |
+| `auth_sessions` | id, user_id, refresh_token, expires_at |
 | `services` | astrologer_id, name, duration_mins, price, call_type (VIDEO/VOICE), is_active |
 | `availability` | astrologer_id, day_of_week (0-6), start_time, end_time |
 | `bookings` | user_id, service_id, astrologer_id, scheduled_at, status, payment_status |
 | `payments` | booking_id, razorpay_order_id, razorpay_payment_id, amount, status |
 | `sessions` | booking_id, agora_channel, started_at, ended_at, status |
 | `messages` | session_id, sender_id, content, file_url, sent_at |
-| `posts` | astrologer_id, content, media_url, media_type (IMAGE/VIDEO) |
+| `posts` | astrologer_id, content, media_url, media_type (IMAGE/VIDEO), linked_service_id |
 | `reviews` | booking_id, user_id, astrologer_id, rating (1-5), comment |
 
 ---
@@ -195,14 +262,11 @@ All schemas defined in `apps/server/src/db/schema/` — central location.
 POST /auth/send-otp
 POST /auth/verify-otp
 POST /auth/google
-POST /auth/refresh
+POST /auth/refresh        ← Refresh token rotation — returns new both tokens
 POST /auth/logout
-```
-
-### Users
-```
-GET  /users/me
+GET  /users/me            ← App restart pe user fetch (role check ke liye)
 PATCH /users/me
+POST /users/onboard
 ```
 
 ### Astrologers
@@ -262,65 +326,81 @@ GET  /reviews/astrologer/:id
 
 ## Key Business Logic
 
+### Auth — OTP (Redis-free)
+- OTP stored in PostgreSQL `otp_verifications` table — no Redis
+- OTP bcrypt-hashed before storing — plain text never stored
+- Rate limit: 3 OTP requests per phone per 10 min (DB count check)
+- Max 3 wrong attempts → 429, must resend
+- One-time use: OTP row deleted after successful verify
+- Refresh token rotation: every refresh returns new both tokens
+- `/users/me` called after session restore — role-based redirect correct hoga
+
 ### Slot System
-- Slots are generated dynamically — no Slot table in DB
-- Algorithm: fetch availability for day → generate slots (window / duration) → remove slots overlapping existing confirmed bookings → return available slots
-- Slots are NOT reserved when added to cart
-- Slot is only blocked after payment webhook confirms booking
+- Slots generated dynamically — no Slot table in DB
+- Algorithm: fetch availability → generate slots (window / duration) → remove confirmed bookings overlap → return available
+- Slots NOT reserved in cart
+- Slot blocked only after payment webhook confirms
 
 ### Cart + Checkout
-- Cart lives in AsyncStorage (Zustand + AsyncStorage persistence)
-- Each cart item = { serviceId, astrologerId, scheduledAt, price, serviceName, astrologerName }
-- At checkout: POST /slots/check first → if any slot taken → show error → user must reselect
-- All slots available → POST /bookings → creates Razorpay order → open Razorpay checkout
-- Booking only confirmed after Razorpay webhook fires
+- Cart in AsyncStorage (Zustand + persist)
+- Cart item: `{ serviceId, astrologerId, scheduledAt, price, serviceName, astrologerName }`
+- At checkout: `POST /slots/check` first → slot taken? → error → reselect
+- All slots ok → `POST /bookings` → Razorpay order → open Razorpay checkout
+- Booking confirmed only after webhook
 
 ### Payment Flow
-- Never confirm booking from frontend callback — only from webhook
-- Webhook endpoint: POST /bookings/webhook
+- Never confirm from frontend callback — webhook only
+- Webhook: `POST /bookings/webhook`
 - Verify Razorpay signature before processing
-- On success: create all bookings, schedule BullMQ jobs
+- On success: create bookings, schedule BullMQ jobs
+
+### Post → Book Now Deep Link
+- Posts can have optional `linkedServiceId`
+- "Book Now" in feed: `linkedServiceId` hai → `service/[id]` → else → `astrologer-profile`
+- Astrologer can link their service when creating a post
 
 ### Session Flow
-- BullMQ job fires at scheduled_at → push notification to both parties
-- Join: POST /sessions/:bookingId/join → backend generates Agora RTC + RTM tokens
-- Agora channel name format: `session_{booking_id}`
-- BullMQ end-job fires at scheduled_at + duration_mins → revoke tokens → session ENDED
+- BullMQ job at `scheduled_at` → push notification to both
+- Join: `POST /sessions/:bookingId/join` → Agora RTC + RTM tokens
+- Channel: `session_{booking_id}`
+- BullMQ end-job at `scheduled_at + duration_mins` → revoke tokens → ENDED
 - No session extension in MVP
 
 ### In-Session Chat
 - Agora RTM for real-time messaging
-- Files/images/documents → upload to Cloudinary first → send Cloudinary URL via RTM
-- Messages also saved to DB (messages table) for history
-
-### Posts
-- Only ASTROLOGER role can create posts
-- Users can only view — no likes/comments/share in MVP
-- Media (image/video) uploaded to Cloudinary before post creation
+- Files → Cloudinary upload first → URL via RTM
+- Messages saved to DB for history
 
 ---
 
-## Auth
+## Auth Implementation Status
 
-- JWT access token: 15 min expiry
-- JWT refresh token: 30 days, stored in AsyncStorage
-- JWT payload: `{ userId, role, iat, exp }`
-- Silent refresh on 401 response via Axios interceptor
-- Google OAuth: frontend gets Google token → POST /auth/google → backend verifies with Google → returns JWT
-- Account linking: same email via phone + Google = same account
+### Implemented ✅
+- `src/services/api/client.ts` — Axios singleton + silent refresh interceptor
+- `src/store/auth.store.ts` — Zustand store with `restoreSession()` + `/users/me`
+- `src/features/auth/api/auth.api.ts` — sendOtp, verifyOtp, onboardUser
+- `app/_layout.tsx` — Real auth guard
+- `login.tsx`, `otp.tsx`, `onboarding.tsx` — Real handlers wired
+
+### Pending ⏳
+- Google Login (`@react-native-google-signin/google-signin`) — Dev Client required
+- React Query setup in `lib/query-client.ts`
+- Cart store with AsyncStorage persistence
 
 ---
 
 ## What NOT to Do
 
 - Do NOT add admin dashboard — out of scope
-- Do NOT add courses or products — out of scope for MVP
+- Do NOT add courses or products — out of scope
 - Do NOT add post likes/comments/share — out of scope
 - Do NOT reserve/hold slots in cart — real-time check at checkout only
 - Do NOT confirm bookings from frontend payment callback — webhook only
 - Do NOT put schema files inside module folders — always in `db/schema/`
 - Do NOT call DB directly from controllers — always go through service layer
 - Do NOT add automatic refund logic — manual only for MVP
+- Do NOT use Redis for OTP — PostgreSQL otp_verifications table use karo
+- Do NOT make direct axios calls in screens — always go through service class
 
 ---
 
@@ -331,6 +411,8 @@ GET  /reviews/astrologer/:id
 DATABASE_URL=
 JWT_ACCESS_SECRET=
 JWT_REFRESH_SECRET=
+JWT_ACCESS_EXPIRES_IN=15m
+JWT_REFRESH_EXPIRES_IN=30d
 MSG91_AUTH_KEY=
 MSG91_TEMPLATE_ID=
 GOOGLE_CLIENT_ID=
@@ -341,7 +423,7 @@ RAZORPAY_KEY_SECRET=
 CLOUDINARY_CLOUD_NAME=
 CLOUDINARY_API_KEY=
 CLOUDINARY_API_SECRET=
-REDIS_URL=
+REDIS_URL=                ← BullMQ ke liye (OTP ke liye nahi)
 ```
 
 ### Frontend (`astrobook-mobile/.env`)

@@ -1,11 +1,13 @@
 import AstroGradient from "@/assets/images/astro-gradient.svg";
 import AstroLogo from "@/assets/images/astro-icon.svg";
 import GoogleLogo from "@/assets/images/google-icon.svg";
+import { useGoogleLogin, useOtpLogin } from "@/features/auth/hooks/useAuth";
+import { GoogleSignin } from "@react-native-google-signin/google-signin";
+
 import Checkbox from "expo-checkbox";
 import { useRouter } from "expo-router";
 import React, { useRef, useState } from "react";
 import {
-  Alert,
   Dimensions,
   FlatList,
   Linking,
@@ -17,7 +19,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import PhoneInput from "react-native-phone-number-input";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -50,36 +51,33 @@ const links = [
   { label: "Blog", url: "https://astrobook-vert.vercel.app/blog" },
   { label: "Help", url: "https://astrobook-vert.vercel.app/help" },
 ];
+GoogleSignin.configure({
+  webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+});
 
 export default function LoginScreen() {
   const router = useRouter();
   const [phone, setPhone] = useState("");
-  const [sending, setSending] = useState(false);
+  // sending state hook se aata hai
   const [remember, setRemember] = useState(false);
   const [selectedCode, setSelectedCode] = useState(COUNTRY_CODES[0]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [activeSlide, setActiveSlide] = useState(0);
   const flatListRef = useRef<FlatList>(null);
-  const phoneInput = useRef<PhoneInput>(null);
-  const [value, setValue] = useState("");
-  const [formattedValue, setFormattedValue] = useState("");
-  // TODO: Replace with real API call
-  const handleSendOTP = () => {
-    if (!phone.trim()) {
-      Alert.alert("Error", "Phone number daalo");
-      return;
-    }
-    setSending(true);
-    const fullPhone = `${selectedCode.code}${phone}`;
-    // Mock — simulate API delay
-    setTimeout(() => {
-      setSending(false);
+
+  const { sendOtp, sending: otpSending } = useOtpLogin();
+  const { googleLogin, loading: googleLoading } = useGoogleLogin();
+
+  const handleSendOTP = async () => {
+    const fullPhone = `${selectedCode.code}${phone.trim()}`;
+    const success = await sendOtp(fullPhone);
+    if (success) {
       router.push({ pathname: "/(auth)/otp", params: { contact: fullPhone } });
-    }, 800);
+    }
   };
 
-  const handleGoogleLogin = () => {
-    Alert.alert("Coming Soon", "Google Sign In coming soon!");
+  const handleGoogleLogin = async () => {
+    await googleLogin();
   };
 
   const onSlideChange = (e: any) => {
@@ -135,13 +133,13 @@ export default function LoginScreen() {
           </View>
           {/* Send OTP Button */}
           <TouchableOpacity
-            style={[styles.otpBtn, sending && { opacity: 0.7 }]}
+            style={[styles.otpBtn, otpSending && { opacity: 0.7 }]}
             onPress={handleSendOTP}
-            disabled={sending}
+            disabled={otpSending}
             activeOpacity={0.85}
           >
             <Text style={styles.otpBtnText}>
-              {sending ? "Sending..." : "Send OTP"}
+              {otpSending ? "Sending..." : "Send OTP"}
             </Text>
           </TouchableOpacity>
 

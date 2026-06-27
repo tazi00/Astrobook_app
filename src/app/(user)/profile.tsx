@@ -1,7 +1,10 @@
 import Header from "@/components/header";
-import { MOCK_USER } from "@/mock/data";
+import { useLogout } from "@/features/auth/hooks/useAuth";
+import { useUser } from "@/features/auth/store/auth.store";
 import { useRouter } from "expo-router";
+import { useState } from "react";
 import {
+  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
@@ -20,6 +23,15 @@ const MENU_ITEMS = [
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const user = useUser();
+  const { handleLogout } = useLogout();
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  const onLogout = async () => {
+    setLoggingOut(true);
+    await handleLogout();
+    setLoggingOut(false);
+  };
 
   return (
     <View style={styles.root}>
@@ -33,9 +45,9 @@ export default function ProfileScreen() {
           <View style={styles.avatarCircle}>
             <Text style={styles.avatarEmoji}>👤</Text>
           </View>
-          <Text style={styles.name}>{MOCK_USER.name}</Text>
-          <Text style={styles.phone}>{MOCK_USER.phone}</Text>
-          <Text style={styles.email}>{MOCK_USER.email}</Text>
+          <Text style={styles.name}>{user?.name ?? "User"}</Text>
+          {user?.phone ? <Text style={styles.phone}>{user.phone}</Text> : null}
+          {user?.email ? <Text style={styles.email}>{user.email}</Text> : null}
           <TouchableOpacity style={styles.editBtn}>
             <Text style={styles.editBtnText}>Edit Profile</Text>
           </TouchableOpacity>
@@ -61,10 +73,19 @@ export default function ProfileScreen() {
 
         {/* Logout */}
         <TouchableOpacity
-          style={styles.logoutBtn}
-          onPress={() => router.replace("/(auth)/login" as any)}
+          style={[styles.logoutBtn, loggingOut && styles.logoutBtnLoading]}
+          onPress={onLogout}
+          disabled={loggingOut}
+          activeOpacity={0.75}
         >
-          <Text style={styles.logoutText}>🚪 Logout</Text>
+          {loggingOut ? (
+            <View style={styles.logoutInner}>
+              <ActivityIndicator size="small" color="#EF4444" />
+              <Text style={styles.logoutText}>Logging out...</Text>
+            </View>
+          ) : (
+            <Text style={styles.logoutText}>🚪 Logout</Text>
+          )}
         </TouchableOpacity>
 
         <View style={{ height: 40 }} />
@@ -106,6 +127,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 24,
     paddingVertical: 8,
+    marginTop: 8,
   },
   editBtnText: { color: "#9d0399", fontWeight: "700", fontSize: 14 },
   menuCard: {
@@ -133,6 +155,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderWidth: 1.5,
     borderColor: "#EF4444",
+  },
+  logoutBtnLoading: { opacity: 0.6 },
+  logoutInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   logoutText: { color: "#EF4444", fontSize: 15, fontWeight: "700" },
 });

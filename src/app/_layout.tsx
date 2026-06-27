@@ -1,28 +1,43 @@
-import { Slot, useRouter, useSegments } from "expo-router";
+import { useAuthStore } from "@/features/auth/store/auth.store";
+import { Slot, useRouter } from "expo-router";
 import { useEffect } from "react";
-
-// TODO: Replace with real Zustand auth store
-const MOCK_AUTH = {
-  isLoggedIn: true,
-  role: "USER" as "USER" | "ASTROLOGER" | null,
-};
+import { ActivityIndicator, View } from "react-native";
 
 export default function RootLayout() {
   const router = useRouter();
-  const segments = useSegments();
+  const { restoreSession, isLoading } = useAuthStore();
 
   useEffect(() => {
-    const inAuthGroup = (segments[0] as any) === "(auth)";
-    if (!MOCK_AUTH.isLoggedIn && !inAuthGroup) {
-      router.replace("/(auth)/login" as any);
-    } else if (MOCK_AUTH.isLoggedIn && inAuthGroup) {
-      if (MOCK_AUTH.role === "ASTROLOGER") {
-        router.replace("/(astrologer)/dashboard" as any);
-      } else {
-        router.replace("/(user)/feed" as any);
+    const init = async () => {
+      const restored = await restoreSession();
+      if (!restored) {
+        router.replace("/(auth)/login" as any);
+        return;
       }
-    }
-  }, [segments]);
+      const currentUser = useAuthStore.getState().user;
+      router.replace(
+        currentUser?.role === "astrologer"
+          ? ("/(astrologer)/dashboard" as any)
+          : ("/(user)/feed" as any),
+      );
+    };
+    init();
+  }, []);
+
+  if (isLoading) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: "#121943",
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
+        <ActivityIndicator color="#9d0399" size="large" />
+      </View>
+    );
+  }
 
   return <Slot />;
 }
