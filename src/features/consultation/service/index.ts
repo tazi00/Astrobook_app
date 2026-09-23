@@ -194,6 +194,19 @@ class ConsultationServiceApi {
   async endSession(id: string): Promise<void> {
     await apiClient.post(`${this.base}/appointments/${id}/end`);
   }
+
+  // Agora token 1 hour mein expire hota hai — lambe (90-min) sessions mein
+  // beech mein renew karna padta hai. onTokenPrivilegeWillExpire fire hone
+  // pe session screen ye call karke naya token engine ko renewToken() se
+  // deta hai (call disconnect nahi hoti).
+  async renewAgoraToken(
+    id: string,
+  ): Promise<{ token: string; channel: string }> {
+    const res = await apiClient.post<{ agora: { token: string; channel: string } }>(
+      `${this.base}/appointments/${id}/renew-token`,
+    );
+    return res.data.agora;
+  }
 }
 
 export const consultationService = new ConsultationServiceApi();

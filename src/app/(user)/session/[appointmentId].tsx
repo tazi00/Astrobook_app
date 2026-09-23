@@ -333,6 +333,18 @@ export default function SessionScreen() {
         onError: (err) => {
           console.log("Agora error:", err);
         },
+        // Token ~30s mein expire hone wala hai — naya token backend se le
+        // ke engine.renewToken() se de do, call disconnect nahi hoti. Ye
+        // khaas taur pe 60-min se lambe services (90-min variant) ke liye
+        // zaroori hai kyunki token hamesha 1 hour ke liye banta hai.
+        onTokenPrivilegeWillExpire: async () => {
+          try {
+            const fresh = await consultationService.renewAgoraToken(appointmentId);
+            engineRef.current?.renewToken(fresh.token);
+          } catch (err) {
+            console.log("Agora token renew failed:", err);
+          }
+        },
       });
 
       engine.joinChannel(agora.token, agora.channel, 0, {
