@@ -68,6 +68,12 @@ const STATUS_STYLES: Record<
     text: "#DC2626",
     label: "Cancelled",
   },
+  missed: {
+    bg: "#FEF2F2",
+    border: "#FECACA",
+    text: "#DC2626",
+    label: "Missed — Refunded",
+  },
 };
 
 function BookingCard({

@@ -32,20 +32,17 @@ export type AddCartItemPayload = {
 
 export type CartCheckoutOrderResponse = {
   orderId: string;
-  // Cashfree's checkout launches off this, not a raw amount+key like
-  // Razorpay did — see CFSession usage in cart.tsx.
-  paymentSessionId: string;
   amount: number; // rupees
   currency: string;
   appointmentIds: string[];
 };
 
-// Cashfree's hosted checkout doesn't hand the client a signed payment id
-// the way Razorpay did (razorpayOrderId/PaymentId/Signature — commented
-// out) — confirmation is webhook-driven server-side, so this just tells
-// the backend which order to re-check the status of.
+// Razorpay's checkout hands back a signed payment id client-side —
+// backend verifies the HMAC signature itself, no webhook needed.
 export type CartCheckoutVerifyPayload = {
-  orderId: string;
+  razorpayOrderId: string;
+  razorpayPaymentId: string;
+  razorpaySignature: string;
 };
 
 export type CartCheckoutVerifyResponse = {

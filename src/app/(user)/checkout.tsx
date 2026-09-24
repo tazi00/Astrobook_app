@@ -16,43 +16,11 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-// react-native-razorpay — commented out during the Cashfree migration,
-// kept installed (see package.json) for a quick rollback:
-// import RazorpayCheckout from "react-native-razorpay";
-// CFPaymentGatewayService is the SDK's native bridge singleton; CFEnvironment
-// and CFSession are plain data types that actually live in the separate
-// `cashfree-pg-api-contract` package (a dependency of the SDK above, not
-// re-exported from it) — confirmed against the installed package sources.
-import { CFPaymentGatewayService } from "react-native-cashfree-pg-sdk";
-import { CFEnvironment, CFSession } from "cashfree-pg-api-contract";
-
-const cashfreeEnvironment =
-  process.env.EXPO_PUBLIC_CASHFREE_ENV === "PRODUCTION"
-    ? CFEnvironment.PRODUCTION
-    : CFEnvironment.SANDBOX;
-
-// The SDK is callback-based (setCallback + doWebPayment), not a Promise
-// like RazorpayCheckout.open was — wrap it so the rest of handlePayment
-// below barely has to change shape.
-function openCashfreeCheckout(
-  orderId: string,
-  paymentSessionId: string,
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    CFPaymentGatewayService.setCallback({
-      onVerify: () => {
-        CFPaymentGatewayService.removeCallback();
-        resolve();
-      },
-      onError: (error: any) => {
-        CFPaymentGatewayService.removeCallback();
-        reject(error);
-      },
-    });
-    const session = new CFSession(paymentSessionId, orderId, cashfreeEnvironment);
-    CFPaymentGatewayService.doWebPayment(session);
-  });
-}
+// Cashfree SDK — commented out during the Razorpay rollback, kept
+// installed (see package.json) for a quick re-migration:
+// import { CFPaymentGatewayService } from "react-native-cashfree-pg-sdk";
+// import { CFEnvironment, CFSession } from "cashfree-pg-api-contract";
+import RazorpayCheckout from "react-native-razorpay";
 
 export default function CheckoutScreen() {
   const router = useRouter();
@@ -110,7 +78,7 @@ export default function CheckoutScreen() {
   const scheduledDate = scheduledAt ? new Date(scheduledAt) : null;
 
   const handlePayment = async () => {
-    if (!astroId || !serviceId || !scheduledAt) return;
+    if (!astroId || !serviceId || !scheduledAt || !service) return;
     setPlacing(true);
     // `let` yahan bahar rakha hai (try ke bahar scope) taaki catch block
     // mein bhi reliably access ho — state (pendingAppointmentId) turant
@@ -131,32 +99,47 @@ export default function CheckoutScreen() {
         setPendingAppointmentId(appointmentId);
       }
 
-      // Step 2: Cashfree order banao (split-aware — astrologer ka payout
-      // isi order ke saath bind ho jaata hai, backend pe)
+      // Step 2: Razorpay order banao
       const order = await paymentService.createOrder(appointmentId);
 
-      // Step 3: Cashfree hosted checkout kholo
-      await openCashfreeCheckout(order.orderId, order.paymentSessionId);
+      // Step 3: Razorpay checkout kholo
+      const result = await RazorpayCheckout.open({
+        key: process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID!,
+        amount: Math.round(order.amount * 100), // paise mein
+        currency: order.currency,
+        order_id: order.orderId,
+        name: "AstroBook",
+        description: service.title,
+        prefill: {
+          email: user?.email,
+          contact: user?.phone,
+          name: user?.name,
+        },
+        theme: { color: "#9d0399" },
+      });
 
-      // Step 4: Status re-check karo → authoritative confirmation Cashfree
-      // ke webhook se already ho chuka hoga (ya abhi ho raha hoga) — yeh
-      // call bas current state fetch karta hai, appointment ko confirm
-      // nahi karta khud
-      await paymentService.verifyPayment({ appointmentId });
+      // Step 4: Signature backend pe verify karo → appointment confirm +
+      // Agora token generate hota hai isi call mein
+      await paymentService.verifyPayment({
+        appointmentId,
+        razorpayOrderId: result.razorpay_order_id,
+        razorpayPaymentId: result.razorpay_payment_id,
+        razorpaySignature: result.razorpay_signature,
+      });
 
       router.replace({
         pathname: "/(user)/booking-confirmation" as any,
         params: { appointmentId },
       });
     } catch (err: any) {
-      // Cashfree's onError callback rejects with a CFErrorResponse-shaped
-      // object (message/getMessage(), not response.data.message) when the
-      // user cancels or the payment fails — check those before the axios
-      // error shape our own API calls use.
+      // RazorpayCheckout.open() rejects with a RazorpayErrorResponse-shaped
+      // object (code/description, not response.data.message) when the user
+      // cancels or the payment fails — check that before the axios error
+      // shape our own API calls use.
       const message =
         err?.response?.data?.message ||
+        err?.description ||
         err?.message ||
-        err?.getMessage?.() ||
         "Payment complete nahi ho paya";
 
       router.replace({
