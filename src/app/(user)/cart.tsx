@@ -1,4 +1,5 @@
 import Header from "@/components/header";
+import { toast } from "@/components/toast";
 import { useUser } from "@/features/auth/store/auth.store";
 import { useCart } from "@/features/cart/hooks/useCart";
 import { cartService } from "@/features/cart/service";
@@ -6,7 +7,6 @@ import type { CartItem } from "@/features/cart/types";
 import { Feather } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   ActivityIndicator,
   Alert,
@@ -16,6 +16,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 // Cashfree SDK — commented out during the Razorpay rollback, kept
 // installed (see package.json) for a quick re-migration:
 // import { CFPaymentGatewayService } from "react-native-cashfree-pg-sdk";
@@ -50,10 +51,9 @@ export default function CartScreen() {
 
   const toggleSelect = (item: CartItem) => {
     if (!item.scheduledAt) {
-      Alert.alert(
-        "Slot Select Karo",
-        "Pehle is item ka date/time select karo.",
-      );
+      // Blocking Alert ki jagah — checkbox tap karte hi turant chhota nudge,
+      // user "Select Slot" button already dekh raha hai isi card pe
+      toast.show("Pehle is item ka date/time select karo", "info");
       return;
     }
     setSelectedIds((prev) => {

@@ -1,4 +1,5 @@
 import Header from "@/components/header";
+import { toast } from "@/components/toast";
 import { useAstrologerProfile } from "@/features/astrologer/hooks/useAstrologerProfile";
 import { cartService } from "@/features/cart/service";
 import {
@@ -87,15 +88,21 @@ export default function ServiceDetailScreen() {
     if (!service || !astrologer || !selectedVariant) return;
     setAddingToCart(true);
     try {
-      await cartService.addItem({
+      const item = await cartService.addItem({
         astrologerId: astrologer.id,
         serviceId: service.id,
         variantId: selectedVariant.id,
       });
-      Alert.alert("Cart mein add ho gaya", "Slot cart mein jaake select kar lena.", [
-        { text: "OK" },
-        { text: "Cart dekho", onPress: () => router.push("/(user)/cart" as any) },
-      ]);
+      // Blocking Alert ki jagah — cart icon ka badge count already batata
+      // hai ki item add ho gaya, isliye sirf ek chhota confirmation kaafi hai.
+      // Same consultancy already cart mein thi to backend usi row ka variant
+      // update kar deta hai (naya duplicate row nahi banta) — isliye message
+      // bhi us hisaab se alag dikhate hain.
+      toast.show(
+        item.wasAlreadyInCart
+          ? "Cart mein already tha — duration/price update ho gaya"
+          : "Cart mein add ho gaya",
+      );
     } catch (err: any) {
       Alert.alert(
         "Error",
@@ -428,7 +435,7 @@ const styles = StyleSheet.create({
   },
   cartBtnText: { color: "#9d0399", fontSize: 13, fontWeight: "700" },
   bookBtn: {
-    backgroundColor: "#9d0399",
+    backgroundColor: "#9d0399", 
     borderRadius: 10,
     paddingHorizontal: 28,
     paddingVertical: 13,

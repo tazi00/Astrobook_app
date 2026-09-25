@@ -20,6 +20,10 @@ export type CartItem = {
   // Client-side enriched (astrologer.tsx pattern jaisa Feed mein hai)
   astrologerName?: string;
   astrologerAvatar?: string;
+  // addItem() response mein hi aata hai — batata hai ki yeh naya row bana ya
+  // pehle se cart mein maujood usi service ka item update hua (same user
+  // same consultancy dobara add nahi hoti, existing hi update hoti hai)
+  wasAlreadyInCart?: boolean;
 };
 
 export type AddCartItemPayload = {
