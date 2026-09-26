@@ -7,7 +7,6 @@ import { paymentService } from "@/features/payment/service";
 import { Feather } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   ActivityIndicator,
   ScrollView,
@@ -16,6 +15,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 // Cashfree SDK — commented out during the Razorpay rollback, kept
 // installed (see package.json) for a quick re-migration:
 // import { CFPaymentGatewayService } from "react-native-cashfree-pg-sdk";
@@ -26,13 +26,12 @@ export default function CheckoutScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const user = useUser();
-  const { astroId, serviceId, variantId, scheduledAt, retryAppointmentId } =
+  const { astroId, serviceId, variantId, scheduledAt } =
     useLocalSearchParams<{
       astroId: string;
       serviceId: string;
       variantId?: string;
       scheduledAt: string;
-      retryAppointmentId?: string;
     }>();
 
   const {
@@ -67,13 +66,14 @@ export default function CheckoutScreen() {
   }, [serviceId, variantId]);
 
   const [placing, setPlacing] = useState(false);
-  // Ek baar appointment ban jaaye (pending), usko yahan store karte hain —
-  // taaki payment fail/cancel hone par retry pe dobara naya appointment na
-  // ban jaaye. Agar payment-failed screen se "retryAppointmentId" ke saath
-  // wapas aaye hain, toh usi ko seed kar do — naya initiateBooking mat karo.
+  // Ek hi payment attempt ke andar (Razorpay order retry, isi screen pe
+  // bina navigate kiye) dobara initiateBooking na ho isliye store karte
+  // hain. Payment fail/cancel hone par ab appointment turant cancel ho
+  // jaata hai (neeche catch block), toh "Dobara Try Karo" hamesha fresh
+  // booking banayega — isliye yahan seed karne ki zarurat nahi.
   const [pendingAppointmentId, setPendingAppointmentId] = useState<
     string | null
-  >(retryAppointmentId ?? null);
+  >(null);
 
   const scheduledDate = scheduledAt ? new Date(scheduledAt) : null;
 
@@ -142,10 +142,27 @@ export default function CheckoutScreen() {
         err?.message ||
         "Payment complete nahi ho paya";
 
+      // Pehle yahan appointment "pending" hi reh jaata tha (retry ke liye) —
+      // isse My Bookings mein confusing "pending" entries jama ho jaati thin
+      // jinhe user ko khud cancel karna padta tha. Razorpay se koi webhook
+      // bhi nahi aata jab user sirf modal band kar deta hai (koi payment
+      // attempt hi nahi bana), isliye client-side hi turant cancel karte
+      // hain — cart checkout flow mein jo fix kiya tha wahi yahan bhi.
+      //
+      // IMPORTANT: yahan `await` zaroori hai (pehle fire-and-forget tha).
+      // Slot-conflict check (`initiateBooking`) 'pending' status waale
+      // appointments ko bhi "already booked" maanta hai, toh agar user turant
+      // "Dobara Try Karo" dabaye aur cancel request abhi DB mein complete
+      // nahi hui, toh naya booking bhi turant "slot already booked" bolke
+      // fail ho jaata — payment-failed screen ka loop ban jaata tha isi wajah se.
+      if (appointmentId) {
+        await consultationService.cancelAppointment(appointmentId).catch(() => {});
+      }
+      setPendingAppointmentId(null);
+
       router.replace({
         pathname: "/(user)/payment-failed" as any,
         params: {
-          appointmentId: appointmentId ?? undefined,
           reason: message,
           astroId,
           serviceId,
