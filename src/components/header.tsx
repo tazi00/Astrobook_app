@@ -43,6 +43,13 @@ export default function Header({ rightSlot }: { rightSlot?: ReactNode }) {
         </View>
         <View style={styles.actionsRow}>
           {rightSlot}
+          {/* Favourites — jo consultation pasand aayi (heart dabaya) */}
+          <TouchableOpacity
+            style={styles.iconBtn}
+            onPress={() => router.push("/(user)/favorites" as any)}
+          >
+            <Feather name="heart" size={22} color="#9d0399" />
+          </TouchableOpacity>
           {/* Notifications */}
           <TouchableOpacity
             style={styles.iconBtn}

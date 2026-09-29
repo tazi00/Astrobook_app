@@ -5,6 +5,7 @@ import { useLogout } from "@/features/auth/hooks/useAuth";
 import { useAuthStore, useUser } from "@/features/auth/store/auth.store";
 import { useFollowCounts } from "@/features/follows/hooks/useFollow";
 import { useMyProfile } from "@/features/users/hooks/useProfile";
+import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
@@ -18,13 +19,19 @@ import {
   View,
 } from "react-native";
 
-const MENU_ITEMS = [
-  { icon: "📅", label: "My Bookings", route: "/(user)/my-bookings" },
-  { icon: "🔔", label: "Notifications", route: "/(user)/notifications" },
-  { icon: "🔒", label: "Privacy & Security", route: null },
-  { icon: "💬", label: "Help & Support", route: null },
-  { icon: "⭐", label: "Rate the App", route: null },
-  { icon: "📋", label: "Terms & Privacy Policy", route: null },
+// Notifications yahan nahi hai — header ke bell icon se already khulta hai
+// (unread badge ke saath). Rate the App abhi hata diya — session ke baad
+// prompt ke roop mein baad mein aayega.
+// route: null wale screens abhi bane nahi hain, banne par yahan route bharna hai.
+const MENU_ITEMS: {
+  icon: keyof typeof Feather.glyphMap;
+  label: string;
+  route: string | null;
+}[] = [
+  { icon: "calendar", label: "My Bookings", route: "/(user)/my-bookings" },
+  { icon: "help-circle", label: "Help & Support", route: "/(user)/help-support" },
+  { icon: "shield", label: "Privacy & Security", route: "/(user)/privacy-security" },
+  { icon: "file-text", label: "Terms & Privacy Policy", route: "/(user)/legal" },
 ];
 
 export default function ProfileScreen() {
@@ -174,10 +181,8 @@ export default function ProfileScreen() {
                 style={styles.upgradeBtn}
                 onPress={() => router.push("/(user)/become-astrologer" as any)}
               >
-                <Text style={styles.upgradeBtnText}>
-                  {" "}
-                  Upgrade to Astrologer
-                </Text>
+                <Feather name="star" size={18} color="#FFF" />
+                <Text style={styles.upgradeBtnText}>Upgrade to Astrologer</Text>
               </TouchableOpacity>
             )}
 
@@ -225,9 +230,11 @@ export default function ProfileScreen() {
               ]}
               onPress={() => item.route && router.push(item.route as any)}
             >
-              <Text style={styles.menuIcon}>{item.icon}</Text>
+              <View style={styles.menuIconWrap}>
+                <Feather name={item.icon} size={18} color="#9d0399" />
+              </View>
               <Text style={styles.menuLabel}>{item.label}</Text>
-              <Text style={styles.menuArrow}>›</Text>
+              <Feather name="chevron-right" size={20} color="#B8B0D0" />
             </TouchableOpacity>
           ))}
         </View>
@@ -246,7 +253,12 @@ export default function ProfileScreen() {
               <Text style={styles.logoutText}>Logging out...</Text>
             </View>
           ) : (
-            <Text style={styles.logoutText}>🚪 Logout</Text>
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+            >
+              <Feather name="log-out" size={18} color="#EF4444" />
+              <Text style={styles.logoutText}>Logout</Text>
+            </View>
           )}
         </TouchableOpacity>
 
@@ -324,7 +336,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#9d0399",
     borderRadius: 16,
     paddingVertical: 14,
+    flexDirection: "row",
+    justifyContent: "center",
     alignItems: "center",
+    gap: 8,
     shadowColor: "#9d0399",
     shadowOpacity: 0.25,
     shadowRadius: 8,
@@ -383,9 +398,15 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   menuItemBorder: { borderBottomWidth: 1, borderBottomColor: "#F5F0FF" },
-  menuIcon: { fontSize: 20, width: 28 },
+  menuIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: "#F3E8FF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   menuLabel: { flex: 1, fontSize: 14, color: "#1A1A2E", fontWeight: "500" },
-  menuArrow: { fontSize: 20, color: "#CCC" },
   logoutBtn: {
     backgroundColor: "#FFF",
     borderRadius: 14,

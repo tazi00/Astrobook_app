@@ -77,6 +77,13 @@ class UsersServiceApi {
     );
     return (res as any).user as UserProfile;
   }
+
+  // DELETE /users/me — account anonymize hota hai (backend: personal data
+  // hatata hai, booking/payment records rakhta hai). Upcoming/ongoing
+  // sessions hon to backend 400 deta hai, message user ko dikha do.
+  async deleteAccount(): Promise<void> {
+    await apiClient.delete("/users/me");
+  }
 }
 
 export const usersService = new UsersServiceApi();

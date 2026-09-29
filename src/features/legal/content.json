@@ -1,0 +1,233 @@
+{
+  "entity": {
+    "appName": "Astrobook",
+    "operatorName": "",
+    "address": "",
+    "contactEmail": "",
+    "grievanceOfficerName": "",
+    "grievanceOfficerEmail": "",
+    "jurisdictionCity": "Kolkata",
+    "website": "https://www.astrobook.in",
+    "effectiveDate": "29 September 2026"
+  },
+  "documents": {
+    "terms": {
+      "title": "Terms & Conditions",
+      "intro": "These Terms & Conditions (\"Terms\") govern your use of the {{appName}} mobile app and related services (the \"Service\"), operated by {{operator}} (\"we\", \"us\", \"our\"). By creating an account or using the Service you agree to these Terms. If you do not agree, please do not use {{appName}}.",
+      "sections": [
+        {
+          "heading": "1. What {{appName}} is",
+          "body": [
+            "{{appName}} is a platform that connects users with independent astrologers for paid consultation sessions over video or voice call, and lets astrologers publish posts for users to discover.",
+            "Astrologers on {{appName}} are independent professionals. They are not our employees, agents or partners, and the advice they give is their own."
+          ]
+        },
+        {
+          "heading": "2. Eligibility and your account",
+          "body": [
+            "You must be at least 18 years old and able to enter into a binding contract under Indian law to use the Service.",
+            "You can sign up with your mobile number (verified by a one-time password) or with your Google account. You are responsible for keeping your device and login secure and for everything that happens under your account. Please give accurate information and keep it up to date."
+          ]
+        },
+        {
+          "heading": "3. Astrology is guidance, not a guarantee",
+          "body": [
+            "Astrology consultations are offered for guidance and personal reflection. Nothing an astrologer says is a guarantee of any outcome.",
+            "Consultations are not a substitute for professional medical, legal, financial or mental-health advice. Please do not delay or skip professional help because of something said in a session, and please make your own decisions responsibly. If you are in an emergency or in crisis, contact local emergency services or a qualified professional immediately."
+          ]
+        },
+        {
+          "heading": "4. Bookings and payments",
+          "body": [
+            "You book a session by choosing an astrologer's service, a duration and a time slot, and paying in the app. Prices are shown in Indian Rupees before you pay.",
+            "Payments are processed by our payment partner, Razorpay. We do not see or store your full card, UPI or bank credentials. A booking is confirmed only after your payment is successfully received.",
+            "A session can be joined only at its scheduled time. Please make sure you have a working internet connection and have allowed camera and microphone access."
+          ]
+        },
+        {
+          "heading": "5. Cancellations and refunds",
+          "bullets": [
+            "If you cancel a confirmed booking at least 48 hours before the session, you get a full refund to your original payment method.",
+            "If you cancel less than 48 hours before the session, do not attend the session, or leave it incomplete, the payment is not refunded.",
+            "If the astrologer cancels a confirmed booking, you always get a full refund.",
+            "If the astrologer does not show up for a confirmed session, contact Help & Support and we will review it and refund you where appropriate.",
+            "Refunds are sent back to the original payment method. The time it takes to appear in your account depends on your bank or payment provider."
+          ]
+        },
+        {
+          "heading": "6. Rules of conduct",
+          "body": ["When using {{appName}} you agree not to:"],
+          "bullets": [
+            "harass, abuse, threaten, or discriminate against anyone;",
+            "share unlawful, obscene, hateful or misleading content;",
+            "record, share or publish a session or another person's personal details without their permission;",
+            "ask for, or take, payments or consultations outside {{appName}} to avoid our fees;",
+            "impersonate anyone, or use another person's account;",
+            "attempt to hack, disrupt, reverse-engineer or misuse the Service, or use it for any unlawful purpose."
+          ]
+        },
+        {
+          "heading": "7. Terms for astrologers",
+          "body": ["If you join {{appName}} as an astrologer, the following also applies to you."],
+          "bullets": [
+            "Your application is reviewed by our team, and you must give true and complete details and documents. You may start offering services only after approval, and we may reject or withdraw approval at our discretion.",
+            "You are an independent professional and are responsible for the advice you give, your own taxes, and any licences your work requires.",
+            "{{appName}} charges a flat 30% platform commission on the price of each service. The remaining 70% is your share.",
+            "Your share is paid out monthly, in a batch around the 7th to 8th of the following month, to the bank account you provide. Taxes such as TDS are deducted where the law requires, at the time of payout.",
+            "Do not guarantee outcomes, make fear-based or exploitative claims, promote harmful practices, or pressure users into extra payments or off-platform dealings.",
+            "Be on time and join your booked sessions. Repeated cancellations or no-shows may lead to suspension."
+          ]
+        },
+        {
+          "heading": "8. Posts and content",
+          "body": [
+            "Astrologers can publish posts, and users can like and comment on them. You own what you post, but you give us a non-exclusive, worldwide, royalty-free licence to host, display and distribute it within the Service. You promise you have the right to post it.",
+            "We may remove content or restrict accounts that break these Terms or the law."
+          ]
+        },
+        {
+          "heading": "9. Suspension and termination",
+          "body": [
+            "We may suspend or end your access if you break these Terms, misuse the Service, or if we are required to by law. You can stop using {{appName}} at any time and can delete your account from Profile > Privacy & Security. See our Privacy Policy for what happens to your data when you do.",
+            "You cannot delete your account while you have confirmed or ongoing sessions. Complete or cancel them first."
+          ]
+        },
+        {
+          "heading": "10. Intellectual property",
+          "body": [
+            "The {{appName}} name, logo, app design and software belong to us or our licensors. You get a limited, personal, non-transferable right to use the app as intended. You may not copy, sell or exploit any part of it."
+          ]
+        },
+        {
+          "heading": "11. Disclaimers and limitation of liability",
+          "body": [
+            "The Service is provided \"as is\" and \"as available\". We do not promise it will be uninterrupted or error-free, and we do not verify or endorse the predictions or advice of any astrologer.",
+            "To the extent permitted by law, we are not liable for any indirect or consequential loss, or for any loss arising from decisions you make based on an astrologer's advice. Our total liability to you for any claim relating to the Service will not exceed the amount you paid us for the booking that the claim is about."
+          ]
+        },
+        {
+          "heading": "12. Changes to these Terms",
+          "body": [
+            "We may update these Terms from time to time. When we make a significant change we will let you know in the app. If you keep using {{appName}} after the update, you accept the new Terms."
+          ]
+        },
+        {
+          "heading": "13. Governing law",
+          "body": [
+            "These Terms are governed by the laws of India. Courts in {{jurisdictionCity}} have exclusive jurisdiction over any dispute, subject to any rights you have under consumer protection law."
+          ]
+        },
+        {
+          "heading": "14. Contact us",
+          "body": ["{{contactBlock}}"]
+        }
+      ]
+    },
+    "privacy": {
+      "title": "Privacy Policy",
+      "intro": "This Privacy Policy explains what personal information {{appName}} (operated by {{operator}}) collects, why we collect it, how we use and share it, and the choices you have. We handle your information in line with applicable Indian law, including the Information Technology Act, 2000 and the Digital Personal Data Protection Act, 2023.",
+      "sections": [
+        {
+          "heading": "1. Information we collect",
+          "body": ["Information you give us:"],
+          "bullets": [
+            "Account details: mobile number, and, if you provide or link them, your name, email address, date of birth, interests, profile photo and bio.",
+            "If you sign in with Google: your Google account identifier, name, email address and profile photo.",
+            "Booking and payment records: the services you book, session times, amounts paid and payment status. Card, UPI and bank credentials are handled by Razorpay and are not stored by us.",
+            "Posts, comments, likes and the astrologers you follow.",
+            "Messages you send to our support team."
+          ]
+        },
+        {
+          "body": ["Additional information for astrologers:"],
+          "bullets": [
+            "Verification documents (such as ID proof and certificates) and an introduction video, submitted with your application.",
+            "Bank account and identity details needed to pay out your earnings, which are shared with our payment partner for this purpose."
+          ]
+        },
+        {
+          "body": ["Information collected automatically:"],
+          "bullets": [
+            "Device and app information, such as device type, operating system and app version.",
+            "A push notification token for your device, so we can send you booking reminders and updates.",
+            "Basic technical logs, such as IP address and error logs, used to keep the Service secure and working."
+          ]
+        },
+        {
+          "heading": "2. Camera, microphone and permissions",
+          "body": [
+            "The app asks for camera and microphone access only so you can take part in video or voice sessions. Audio and video are carried in real time by our calling provider, Agora. We do not record your sessions. You can change these permissions at any time from Profile > Privacy & Security > App permissions, or in your phone settings.",
+            "If you choose a profile photo or upload media to a post, the app asks to access your photos or camera for that purpose only."
+          ]
+        },
+        {
+          "heading": "3. How we use your information",
+          "bullets": [
+            "To create and secure your account, and to verify your mobile number.",
+            "To let you book, pay for, join and manage sessions.",
+            "To verify and onboard astrologers, and to pay them.",
+            "To send booking reminders, session alerts and other service notifications.",
+            "To show posts, follow astrologers and provide the community features.",
+            "To provide customer support, prevent fraud and misuse, and meet legal, tax and accounting obligations.",
+            "To improve the app and fix problems."
+          ]
+        },
+        {
+          "heading": "4. Who we share information with",
+          "body": [
+            "We do not sell your personal information. We share it only as needed to run the Service:"
+          ],
+          "bullets": [
+            "The other person in a booking: an astrologer sees your name and profile photo and the details of your booking, and you see the astrologer's public profile.",
+            "Service providers that work for us: Razorpay (payments and payouts), Agora (real-time audio and video), Google (sign-in), ImageKit (image and media hosting), Expo (push notifications), our WhatsApp or SMS gateway (delivering one-time passwords), and our cloud hosting and database providers.",
+            "Authorities, when we are legally required to, or to protect the rights, safety and security of our users and the Service."
+          ]
+        },
+        {
+          "heading": "5. Your profile visibility",
+          "body": [
+            "Astrologer profiles, services and posts are visible to other users. Your own profile details are not shown publicly, except that your name and photo appear next to comments you make on posts."
+          ]
+        },
+        {
+          "heading": "6. How long we keep information",
+          "body": [
+            "We keep your information for as long as your account is active. If you delete your account, we remove your personal details, profile, posts, comments, follows and notification data, and we sign you out of all devices. We keep booking and payment records in an anonymised form, no longer linked to your name or contact details, because tax, accounting and dispute-resolution rules require us to hold them."
+          ]
+        },
+        {
+          "heading": "7. Your choices and rights",
+          "bullets": [
+            "Access and correct your details from Profile > Edit Profile.",
+            "Delete your account from Profile > Privacy & Security > Delete Account. You cannot delete while you have confirmed or ongoing sessions.",
+            "Log out of all devices from Profile > Privacy & Security.",
+            "Turn off camera, microphone or notification permissions in your phone settings.",
+            "For any other request, such as a copy of your data or withdrawing consent, contact us using the details below."
+          ]
+        },
+        {
+          "heading": "8. Security",
+          "body": [
+            "We use reasonable technical and organisational measures to protect your information, including encrypted connections and access controls. No system is completely secure, so we cannot guarantee absolute security. Please keep your device and login safe."
+          ]
+        },
+        {
+          "heading": "9. Children",
+          "body": [
+            "{{appName}} is for people aged 18 and over. We do not knowingly collect information from anyone under 18. If you believe a child has given us their information, please contact us and we will delete it."
+          ]
+        },
+        {
+          "heading": "10. Changes to this policy",
+          "body": [
+            "We may update this Privacy Policy from time to time. The date at the top shows when it was last changed, and we will tell you in the app about significant changes."
+          ]
+        },
+        {
+          "heading": "11. Contact and grievances",
+          "body": ["{{grievanceBlock}}"]
+        }
+      ]
+    }
+  }
+}

@@ -59,7 +59,10 @@ export function useOtpLogin() {
       const data: AuthResult = await authService.verifyOtp(phone, otp);
       await loginSuccess(data);
 
-      if (data.isNewUser) {
+      // isNewUser sirf account banne ki pehli baar true hota hai — doosri baar
+      // login pe false aata, isliye adhoora onboarding (phone verify nahi hua)
+      // feed mein ghus jaata tha. Asli source of truth: user.isOnboarded.
+      if (data.isNewUser || !data.user.isOnboarded) {
         router.replace("/(auth)/onboarding");
       } else {
         redirectByRole(data.user.role, router);
@@ -111,7 +114,10 @@ export function useGoogleLogin() {
       const data: AuthResult = await authService.googleLogin(idToken);
       await loginSuccess(data);
 
-      if (data.isNewUser) {
+      // isNewUser sirf account banne ki pehli baar true hota hai — doosri baar
+      // login pe false aata, isliye adhoora onboarding (phone verify nahi hua)
+      // feed mein ghus jaata tha. Asli source of truth: user.isOnboarded.
+      if (data.isNewUser || !data.user.isOnboarded) {
         router.replace("/(auth)/onboarding");
       } else {
         redirectByRole(data.user.role, router);
@@ -121,7 +127,14 @@ export function useGoogleLogin() {
       console.log("Error code:", err.code);
       console.log("Error message:", err.message);
       if (err.code !== "SIGN_IN_CANCELLED") {
-        Alert.alert("Error", "Google login fail hua");
+        // TEMP DEBUG: production mein adb access nahi tha, isliye error
+        // detail seedha alert mein dikha rahe hain taaki exact code/message
+        // dikh jaaye. Issue fix hone ke baad yeh wapas simple message pe
+        // revert kar dena — end users ko raw error code dikhana theek nahi.
+        Alert.alert(
+          "Google Login Error (debug)",
+          `code: ${err.code}\nmessage: ${err.message}`,
+        );
       }
     } finally {
       setLoading(false);

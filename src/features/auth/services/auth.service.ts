@@ -51,6 +51,12 @@ class AuthService {
   async logout(refreshToken: string): Promise<void> {
     await apiClient.post("/auth/logout", { refreshToken });
   }
+
+  // Sabhi devices ke sessions revoke — current device ka bhi. Caller ko iske
+  // baad local logout (store.logout) karna hai.
+  async logoutAll(): Promise<void> {
+    await apiClient.post("/auth/logout-all");
+  }
 }
 
 export const authService = new AuthService();

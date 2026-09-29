@@ -1,4 +1,4 @@
-import Header from "@/components/header";
+import ScreenHeader from "@/components/ScreenHeader";
 import { toast } from "@/components/toast";
 import { useUser } from "@/features/auth/store/auth.store";
 import { useCart } from "@/features/cart/hooks/useCart";
@@ -195,7 +195,18 @@ export default function CartScreen() {
 
   return (
     <View style={styles.root}>
-      <Header />
+      {/* Notifications / Favourites jaisi hi purple app bar (back ke saath) */}
+      <View style={{ paddingTop: insets.top }}>
+        <ScreenHeader
+          title="Cart"
+          subtitle={
+            !loading && items.length > 0
+              ? `${items.length} ${items.length === 1 ? "item" : "items"}`
+              : undefined
+          }
+          fallbackHref="/(user)/(tabs)/feed"
+        />
+      </View>
 
       {loading ? (
         <View style={styles.centerFill}>

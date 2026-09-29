@@ -14,6 +14,22 @@
       },
       "oauth_client": [
         {
+          "client_id": "863538894717-36kfjb74peql47iap5i0vdns45qbdu0a.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.astrobook.app",
+            "certificate_hash": "bd74642eb77b224ff98665891fcb77b57fa97e51"
+          }
+        },
+        {
+          "client_id": "863538894717-eel1dd67i91fmbb64r8batk6ccs8mspn.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.astrobook.app",
+            "certificate_hash": "9b5b3152198c8aa97bc50aca44e781e44e4312d0"
+          }
+        },
+        {
           "client_id": "863538894717-h7387re39sf7o82e7nsmkutaekegtafh.apps.googleusercontent.com",
           "client_type": 3
         }

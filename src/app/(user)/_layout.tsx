@@ -108,6 +108,10 @@ export default function UserLayout() {
       <Stack.Screen name="my-bookings" />
       <Stack.Screen name="post/[id]" />
       <Stack.Screen name="edit-profile" />
+      <Stack.Screen name="help-support" />
+      <Stack.Screen name="privacy-security" />
+      <Stack.Screen name="legal" />
+      <Stack.Screen name="favorites" />
       <Stack.Screen name="session/[appointmentId]" />
     </Stack>
   );

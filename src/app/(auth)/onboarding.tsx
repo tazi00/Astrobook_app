@@ -1,5 +1,5 @@
 import AstroGradient from "@/assets/images/astro-gradient.svg";
-import { useOnboarding } from "@/features/auth/hooks/useAuth";
+import { useLogout, useOnboarding } from "@/features/auth/hooks/useAuth";
 import { useAuthStore } from "@/features/auth/store/auth.store";
 import { useCategories } from "@/features/categories/hooks/useCategories";
 import { usePhoneVerification } from "@/features/users/hooks/usePhoneVerification";
@@ -9,6 +9,7 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -28,6 +29,19 @@ export default function OnboardingScreen() {
   const { user } = useAuthStore();
   const updateUser = useAuthStore((s) => s.updateUser);
   const router = useRouter();
+  const { handleLogout } = useLogout();
+
+  // Onboarding mein fasne par bahar nikalne ka raasta — logout karke login
+  // screen pe wapas (dusre account se login karne ke liye).
+  const confirmSwitchAccount = () =>
+    Alert.alert(
+      "Account badalna hai?",
+      "Aap logout ho jaoge aur login screen pe wapas jaoge.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Logout", style: "destructive", onPress: handleLogout },
+      ],
+    );
 
   // ─── Step control — 1: General Details, 2: Interests ─────────────────────
   const [step, setStep] = useState<1 | 2>(1);
@@ -414,6 +428,17 @@ export default function OnboardingScreen() {
               </>
             )}
 
+            {/* Switch account / logout — onboarding mein back ka raasta nahi hota */}
+            <TouchableOpacity
+              style={styles.switchBtn}
+              onPress={confirmSwitchAccount}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.switchText}>
+                Kisi aur account se login karo
+              </Text>
+            </TouchableOpacity>
+
             <View style={{ height: 40 }} />
           </ScrollView>
         </KeyboardAvoidingView>
@@ -616,6 +641,14 @@ const styles = StyleSheet.create({
 
   backBtn: { alignItems: "center", paddingVertical: 10, marginBottom: 4 },
   backBtnText: { color: "#C4B5FD", fontSize: 14, fontWeight: "600" },
+
+  switchBtn: { alignItems: "center", paddingVertical: 12, marginTop: 8 },
+  switchText: {
+    color: "#C4B5FD",
+    fontSize: 13,
+    fontWeight: "600",
+    textDecorationLine: "underline",
+  },
 
   skipBtn: { alignItems: "center", paddingVertical: 10 },
   skipText: { color: "#C4B5FD", fontSize: 14 },

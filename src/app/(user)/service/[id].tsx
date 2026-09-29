@@ -2,6 +2,7 @@ import Header from "@/components/header";
 import { toast } from "@/components/toast";
 import { useAstrologerProfile } from "@/features/astrologer/hooks/useAstrologerProfile";
 import { cartService } from "@/features/cart/service";
+import FavoriteButton from "@/features/favorites/components/FavoriteButton";
 import {
   VARIANT_DURATION_LABELS,
   type ConsultationServiceVariant,
@@ -149,6 +150,11 @@ export default function ServiceDetailScreen() {
           <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
             <Feather name="arrow-left" size={22} color="#1F2937" />
           </TouchableOpacity>
+
+          <FavoriteButton
+            itemId={service.id}
+            style={{ position: "absolute", top: -15, right: -10, zIndex: 1 }}
+          />
 
           <View style={styles.heroEmojiBox}>
             <Text style={{ fontSize: 56 }}>{astrologer.meta?.emoji ?? "🔮"}</Text>

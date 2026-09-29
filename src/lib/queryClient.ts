@@ -46,4 +46,8 @@ export const queryKeys = {
   bookings: {
     mine: ["bookings", "mine"] as const,
   },
+  favorites: {
+    ids: (itemType: string) => ["favorites", "ids", itemType] as const,
+    list: (itemType: string) => ["favorites", "list", itemType] as const,
+  },
 };
