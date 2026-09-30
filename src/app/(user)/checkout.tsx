@@ -26,13 +26,12 @@ export default function CheckoutScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const user = useUser();
-  const { astroId, serviceId, variantId, scheduledAt } =
-    useLocalSearchParams<{
-      astroId: string;
-      serviceId: string;
-      variantId?: string;
-      scheduledAt: string;
-    }>();
+  const { astroId, serviceId, variantId, scheduledAt } = useLocalSearchParams<{
+    astroId: string;
+    serviceId: string;
+    variantId?: string;
+    scheduledAt: string;
+  }>();
 
   const {
     astrologer,
@@ -156,7 +155,9 @@ export default function CheckoutScreen() {
       // nahi hui, toh naya booking bhi turant "slot already booked" bolke
       // fail ho jaata — payment-failed screen ka loop ban jaata tha isi wajah se.
       if (appointmentId) {
-        await consultationService.cancelAppointment(appointmentId).catch(() => {});
+        await consultationService
+          .cancelAppointment(appointmentId)
+          .catch(() => {});
       }
       setPendingAppointmentId(null);
 
@@ -254,7 +255,9 @@ export default function CheckoutScreen() {
 
           <View style={styles.priceRow}>
             <Text style={styles.totalLabel}>Total Amount</Text>
-            <Text style={styles.totalValue}>₹ {variant?.price ?? service.price ?? "—"}</Text>
+            <Text style={styles.totalValue}>
+              ₹ {variant?.price ?? service.price ?? "—"}
+            </Text>
           </View>
         </View>
 
