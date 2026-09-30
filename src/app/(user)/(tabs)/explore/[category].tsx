@@ -1,14 +1,21 @@
+import { AstroColors } from "@/constants/astro-theme";
+import AstrologerCard from "@/features/astrologer/components/AstrologerCard";
+import AstrologerCardSkeleton from "@/features/astrologer/components/AstrologerCardSkeleton";
+import { useAstrologersList } from "@/features/astrologer/hooks/useAstrologersList";
+import CategoryHero from "@/features/categories/components/CategoryHero";
+import { usePullStretch } from "@/features/categories/hooks/usePullStretch";
+import ServiceSlideCard from "@/features/consultation/components/ServiceSlideCard";
 import { consultationService } from "@/features/consultation/service";
 import type { BrowsedService } from "@/features/consultation/types";
+import ProfilePostTile from "@/features/posts/components/ProfilePostTile";
 import { useCategoryPosts } from "@/features/posts/hooks/useFeed";
-import type { Post } from "@/features/posts/types/post.types";
 import { Feather } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
   Dimensions,
   FlatList,
   StyleSheet,
@@ -19,6 +26,13 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const PAD = 16;
+const GAP = 12;
+// Astrologers slider: har "page" me 2 compact cards upar-neeche; agla page
+// thoda jhaankta hai taaki pata chale ki slide hota hai
+const ASTRO_SLIDE_W = SCREEN_WIDTH - PAD * 2 - 24;
+const SERVICE_W = 216;
+const POST_W = 156;
 
 // Astrobook ka signature "cosmic" navy — login/otp/onboarding mein already
 // establish hai. Har category hero isi navy mein blend hota hai neeche se,
@@ -122,31 +136,6 @@ const CATEGORY_META: Record<
   },
 };
 
-// Hero ke andar chhote decorative "stars" — fixed positions, lightweight
-// (koi extra asset/library nahi chahiye), sirf cosmic feel dene ke liye.
-const STAR_DOTS = [
-  { top: "24%", left: "12%", size: 3, opacity: 0.9 },
-  { top: "34%", left: "85%", size: 2, opacity: 0.6 },
-  { top: "20%", left: "70%", size: 2, opacity: 0.7 },
-  { top: "58%", left: "8%", size: 2, opacity: 0.5 },
-  { top: "68%", left: "90%", size: 3, opacity: 0.8 },
-  { top: "16%", left: "45%", size: 2, opacity: 0.5 },
-];
-
-const BG_PALETTE = [
-  "#6B21A8",
-  "#1E3A5F",
-  "#92400E",
-  "#065F46",
-  "#9D174D",
-  "#4C1D95",
-];
-function colorForId(id: string) {
-  let hash = 0;
-  for (let i = 0; i < id.length; i++) hash = (hash + id.charCodeAt(i)) % 997;
-  return BG_PALETTE[hash % BG_PALETTE.length]!;
-}
-
 export default function CategoryScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -161,6 +150,8 @@ export default function CategoryScreen() {
     description: "Explore the cosmic wisdom of this ancient practice.",
   };
 
+  const { pull, maxPull, scrollProps } = usePullStretch();
+
   const {
     posts,
     loading: postsLoading,
@@ -172,6 +163,20 @@ export default function CategoryScreen() {
 
   const [services, setServices] = useState<BrowsedService[]>([]);
   const [servicesLoading, setServicesLoading] = useState(false);
+
+  const astro = useAstrologersList(
+    { category, sort: "recommended", limit: 20 },
+    { enabled: !!category },
+  );
+
+  // 2-2 ke pages (upar-neeche) — horizontal slide
+  const astroPages = useMemo(() => {
+    const pages: (typeof astro.astrologers)[] = [];
+    for (let i = 0; i < astro.astrologers.length; i += 2) {
+      pages.push(astro.astrologers.slice(i, i + 2));
+    }
+    return pages;
+  }, [astro.astrologers]);
 
   useEffect(() => {
     fetchPosts();
@@ -188,314 +193,258 @@ export default function CategoryScreen() {
   const isEmpty =
     !postsLoading &&
     !servicesLoading &&
+    !astro.loading &&
     posts.length === 0 &&
-    services.length === 0;
+    services.length === 0 &&
+    astro.astrologers.length === 0;
 
-  const otherCategories = Object.entries(CATEGORY_META)
-    .filter(([key]) => key !== category)
+  const otherCategories = Object.keys(CATEGORY_META)
+    .filter((key) => key !== category)
     .slice(0, 8);
 
-  const renderPostItem = ({ item }: { item: Post }) => (
-    <TouchableOpacity
-      style={[
-        styles.postCard,
-        { backgroundColor: colorForId(item.astrologerId) },
-      ]}
-      activeOpacity={0.9}
-      onPress={() =>
-        router.push({
-          pathname: "/(user)/post/[id]" as any,
-          params: { id: item.id },
-        })
-      }
-    >
-      <View style={styles.postCardHeader}>
-        <View style={styles.postAvatar}>
-          <Text style={{ fontSize: 16 }}>{item.astrologerAvatar ?? "🔮"}</Text>
-        </View>
-        <Text style={styles.postAuthor} numberOfLines={1}>
-          {item.astrologerName ?? "Astrologer"}
-        </Text>
-      </View>
-      <Text style={styles.postContent} numberOfLines={4}>
-        {item.content}
-      </Text>
-    </TouchableOpacity>
-  );
+  const prettify = (key: string) =>
+    key
+      .split("-")
+      .map((w) => w[0]?.toUpperCase() + w.slice(1))
+      .join(" ");
 
   return (
     <View style={styles.root}>
       <StatusBar style="light" />
-      <FlatList
-        data={posts}
-        keyExtractor={(item) => item.id}
-        horizontal={false}
+      <Animated.ScrollView
         showsVerticalScrollIndicator={false}
-        onEndReached={loadMorePosts}
-        onEndReachedThreshold={0.4}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+        {...scrollProps}
+      >
+        <CategoryHero
+          id={category}
+          label={label}
+          description={meta.description}
+          color={meta.color}
+          navy={COSMIC_NAVY}
+          paddingTop={insets.top + 50}
+          pull={pull}
+          maxPull={maxPull}
+          onBack={() => router.back()}
+        />
 
-        ListHeaderComponent={
-          <View>
-              {/* ── Hero — cosmic gradient, brand navy mein blend hoti hai.
-                  Gradient khud full-bleed hai (status bar ke peeche bhi jaata
-                  hai, immersive look), lekin andar ka content (back button,
-                  badge) insets.top se safe distance rakhta hai — warna status
-                  bar icons ke saath overlap/cramped lagta hai. ── */}
-            <LinearGradient
-              colors={[meta.color, COSMIC_NAVY]}
-              style={[styles.hero, { paddingTop: insets.top + 50 }]}
-            >
-              {STAR_DOTS.map((star, i) => (
-                <View
-                  key={i}
-                  style={[
-                    styles.star,
-                    {
-                      top: star.top as any,
-                      left: star.left as any,
-                      width: star.size,
-                      height: star.size,
-                      opacity: star.opacity,
-                    },
-                  ]}
-                />
-              ))}
+        {/* ── Astrologers — horizontal slider ── */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>Astrologers</Text>
+            {astro.astrologers.length > 0 ? (
+              <Text style={styles.sectionCount}>{astro.astrologers.length}</Text>
+            ) : null}
+          </View>
+        </View>
+        {astro.loading ? (
+          <View style={{ paddingHorizontal: PAD, gap: 10 }}>
+            <AstrologerCardSkeleton variant="compact" />
+            <AstrologerCardSkeleton variant="compact" />
+          </View>
+        ) : astro.error ? (
+          <View style={styles.padded}>
+            <View style={styles.emptyBox}>
+              <Text style={styles.emptyTitle}>Astrologers load nahi hue</Text>
               <TouchableOpacity
-                style={[styles.backBtn, { top: insets.top + 12 }]}
-                onPress={() => router.back()}
-                hitSlop={8}
+                style={styles.retryBtn}
+                onPress={() => astro.refetch()}
+                accessibilityRole="button"
               >
-                <Feather name="arrow-left" size={22} color="#FFF" />
+                <Text style={styles.retryText}>Dobara try karo</Text>
               </TouchableOpacity>
-              <View style={styles.emojiBadge}>
-                <Text style={styles.heroEmoji}>{meta.emoji}</Text>
+            </View>
+          </View>
+        ) : astro.astrologers.length === 0 ? (
+          <View style={styles.padded}>
+            <View style={styles.emptyBox}>
+              <View style={styles.emptyIconCircle}>
+                <Feather name="user" size={20} color={AstroColors.brand} />
               </View>
-              <Text style={styles.heroTitle}>{label}</Text>
-              <Text style={styles.heroDesc}>{meta.description}</Text>
-            </LinearGradient>
-
-            {/* ── Consultancies Section ── */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Consultancies</Text>
-              {servicesLoading ? (
-                <ActivityIndicator color="#9d0399" style={{ marginTop: 12 }} />
-              ) : services.length === 0 ? (
-                <View style={styles.emptyBox}>
-                  <View style={styles.emptyIconCircle}>
-                    <Feather name="users" size={20} color="#9d0399" />
-                  </View>
-                  <Text style={styles.emptyTitle}>
-                    Abhi koi consultancy nahi
-                  </Text>
-                  <Text style={styles.emptySubtext}>
-                    Is category ke astrologers jaldi add honge
-                  </Text>
-                </View>
-              ) : (
-                <FlatList
-                  data={services}
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.horizontalList}
-                  keyExtractor={(item) => item.id}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity
-                      style={styles.astroCard}
-                      activeOpacity={0.9}
-                      onPress={() =>
-                        router.push({
-                          pathname: "/(user)/astrologer-profile" as any,
-                          params: { id: item.astrologerId },
-                        })
-                      }
-                    >
-                      <View
-                        style={[
-                          styles.astroAvatar,
-                          { backgroundColor: colorForId(item.id) },
-                        ]}
-                      >
-                        <Text style={{ fontSize: 24 }}>🔮</Text>
-                      </View>
-                      <Text style={styles.astroName} numberOfLines={1}>
-                        {item.title}
-                      </Text>
-                      <Text style={styles.astroSpeciality} numberOfLines={1}>
-                        by {item.astrologerName}
-                      </Text>
-                      <Text style={styles.astroPrice}>
-                        {item.price ? `₹${item.price}` : "—"}
-                      </Text>
-                      <TouchableOpacity
-                        style={styles.bookBtn}
-                        onPress={() =>
-                          router.push({
-                            pathname: "/(user)/astrologer-profile" as any,
-                            params: { id: item.astrologerId },
-                          })
-                        }
-                      >
-                        <Text style={styles.bookBtnText}>Book</Text>
-                      </TouchableOpacity>
-                    </TouchableOpacity>
-                  )}
-                />
-              )}
+              <Text style={styles.emptyTitle}>Abhi koi astrologer nahi</Text>
+              <Text style={styles.emptySubtext}>
+                Is category ke astrologers jaldi add honge
+              </Text>
             </View>
-
-            {/* ── Recent Posts Section ── */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Recent Posts</Text>
-              {postsLoading && posts.length === 0 && (
-                <ActivityIndicator color="#9d0399" style={{ marginTop: 12 }} />
-              )}
-              {!postsLoading && posts.length === 0 && (
-                <View style={styles.emptyBox}>
-                  <View style={styles.emptyIconCircle}>
-                    <Feather name="file-text" size={20} color="#9d0399" />
-                  </View>
-                  <Text style={styles.emptyTitle}>Koi post nahi mila</Text>
-                  <Text style={styles.emptySubtext}>
-                    Astrologers is category mein post karenge toh yahan dikhega
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            {/* ── Empty hone par khaali space ki jagah "aur explore karo"
-                genuinely useful section — dead-end feel nahi hoga ── */}
-            {isEmpty && otherCategories.length > 0 && (
-              <View style={styles.exploreMoreSection}>
-                <Text style={styles.sectionTitle}>Aur bhi explore karo</Text>
-                <View style={styles.categoryChips}>
-                  {otherCategories.map(([key, cat]) => (
-                    <TouchableOpacity
-                      key={key}
-                      style={styles.categoryChip}
-                      activeOpacity={0.85}
-                      onPress={() =>
-                        router.push({
-                          pathname: "/(user)/explore/[category]" as any,
-                          params: {
-                            category: key,
-                            label: key
-                              .split("-")
-                              .map((w) => w[0]?.toUpperCase() + w.slice(1))
-                              .join(" "),
-                          },
-                        })
-                      }
-                    >
-                      <Text style={styles.categoryChipEmoji}>{cat.emoji}</Text>
-                      <Text style={styles.categoryChipText}>
-                        {key
-                          .split("-")
-                          .map((w) => w[0]?.toUpperCase() + w.slice(1))
-                          .join(" ")}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
+          </View>
+        ) : (
+          <FlatList
+            data={astroPages}
+            horizontal
+            keyExtractor={(page) => page.map((a) => a.id).join("-")}
+            showsHorizontalScrollIndicator={false}
+            snapToInterval={ASTRO_SLIDE_W + GAP}
+            decelerationRate="fast"
+            snapToAlignment="start"
+            contentContainerStyle={styles.sliderContent}
+            renderItem={({ item: page }) => (
+              <View style={{ width: ASTRO_SLIDE_W, gap: 10 }}>
+                {page.map((a) => (
+                  <AstrologerCard key={a.id} astrologer={a} variant="compact" />
+                ))}
               </View>
             )}
+          />
+        )}
+
+        {/* ── Consultancies — horizontal slider ── */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Consultancies</Text>
+        </View>
+        {servicesLoading ? (
+          <ActivityIndicator color={AstroColors.brand} style={{ marginTop: 4 }} />
+        ) : services.length === 0 ? (
+          <View style={styles.padded}>
+            <View style={styles.emptyBox}>
+              <View style={styles.emptyIconCircle}>
+                <Feather name="users" size={20} color={AstroColors.brand} />
+              </View>
+              <Text style={styles.emptyTitle}>Abhi koi consultancy nahi</Text>
+              <Text style={styles.emptySubtext}>
+                Is category ke astrologers jaldi add honge
+              </Text>
+            </View>
           </View>
-        }
-        renderItem={renderPostItem}
-        numColumns={1}
-        contentContainerStyle={{
-          // paddingHorizontal: 16,
-          gap: 12,
-          paddingBottom: insets.bottom + 16,
-        }}
-        ListFooterComponent={
-          postsLoadingMore ? (
-            <ActivityIndicator color="#9d0399" style={{ marginVertical: 20 }} />
-          ) : !postsHasMore && posts.length > 0 ? (
-            <Text style={styles.endText}>Bas itna hi</Text>
-          ) : (
-            <View style={{ height: 8 }} />
-          )
-        }
-      />
+        ) : (
+          <FlatList
+            data={services}
+            horizontal
+            keyExtractor={(item) => item.id}
+            showsHorizontalScrollIndicator={false}
+            snapToInterval={SERVICE_W + GAP}
+            decelerationRate="fast"
+            snapToAlignment="start"
+            contentContainerStyle={styles.sliderContent}
+            renderItem={({ item }) => (
+              <ServiceSlideCard service={item} width={SERVICE_W} accent={meta.color} />
+            )}
+          />
+        )}
+
+        {/* ── Recent Posts — single row ── */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Recent Posts</Text>
+        </View>
+        {postsLoading && posts.length === 0 ? (
+          <ActivityIndicator color={AstroColors.brand} style={{ marginTop: 4 }} />
+        ) : posts.length === 0 ? (
+          <View style={styles.padded}>
+            <View style={styles.emptyBox}>
+              <View style={styles.emptyIconCircle}>
+                <Feather name="file-text" size={20} color={AstroColors.brand} />
+              </View>
+              <Text style={styles.emptyTitle}>Koi post nahi mila</Text>
+              <Text style={styles.emptySubtext}>
+                Astrologers is category mein post karenge toh yahan dikhega
+              </Text>
+            </View>
+          </View>
+        ) : (
+          <FlatList
+            data={posts}
+            horizontal
+            keyExtractor={(item) => item.id}
+            showsHorizontalScrollIndicator={false}
+            onEndReached={() => postsHasMore && loadMorePosts()}
+            onEndReachedThreshold={0.6}
+            contentContainerStyle={styles.sliderContent}
+            renderItem={({ item }) => (
+              <ProfilePostTile
+                post={item}
+                width={POST_W}
+                showAuthor
+                onPress={() =>
+                  router.push({
+                    pathname: "/(user)/post/[id]" as any,
+                    params: { id: item.id },
+                  })
+                }
+              />
+            )}
+            ListFooterComponent={
+              postsLoadingMore ? (
+                <ActivityIndicator
+                  color={AstroColors.brand}
+                  style={{ alignSelf: "center", marginHorizontal: 12 }}
+                />
+              ) : null
+            }
+          />
+        )}
+
+        {/* Sab kuch khaali ho to dead-end na lage */}
+        {isEmpty && otherCategories.length > 0 && (
+          <View style={styles.exploreMoreSection}>
+            <Text style={styles.sectionTitle}>Aur bhi explore karo</Text>
+            <View style={styles.categoryChips}>
+              {otherCategories.map((key) => (
+                <TouchableOpacity
+                  key={key}
+                  style={styles.categoryChip}
+                  activeOpacity={0.85}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/(user)/explore/[category]" as any,
+                      params: { category: key, label: prettify(key) },
+                    })
+                  }
+                >
+                  <Text style={styles.categoryChipText}>{prettify(key)}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
+      </Animated.ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#F9F5FF" },
-  emptyText: { fontSize: 13, color: "#9CA3AF", paddingHorizontal: 16 },
-  endText: {
-    textAlign: "center",
-    fontSize: 12,
-    color: "#9CA3AF",
-    paddingVertical: 20,
-  },
+  root: { flex: 1, backgroundColor: AstroColors.canvas },
 
-  hero: {
-    paddingBottom: 32,
-    paddingHorizontal: 20,
-    alignItems: "center",
-    gap: 6,
-    overflow: "hidden",
-  },
-  star: {
-    position: "absolute",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 4,
-  },
-  backBtn: {
-    position: "absolute",
-    top: 16,
-    left: 16,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "rgba(255,255,255,0.15)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  emojiBadge: {
-    width: 64,
-    height: 64,
-    borderRadius: 20,
-    backgroundColor: "rgba(255,255,255,0.14)",
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 12,
-  },
-  heroEmoji: { fontSize: 32 },
-  heroTitle: { fontSize: 22, fontWeight: "800", color: "#FFF", marginTop: 6 },
-  heroDesc: {
-    fontSize: 13,
-    color: "rgba(255,255,255,0.85)",
-    textAlign: "center",
-    lineHeight: 19,
-    marginTop: 4,
-  },
-
-  section: { paddingTop: 20, paddingHorizontal: 16 },
+  section: { paddingTop: 22, paddingHorizontal: PAD },
+  padded: { paddingHorizontal: PAD },
   sectionTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#0b1d5b",
+    fontSize: 16,
+    fontWeight: "800",
+    color: AstroColors.ink,
     marginBottom: 12,
   },
+  sectionHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 12,
+  },
+  sectionCount: {
+    fontSize: 11.5,
+    fontWeight: "800",
+    color: AstroColors.brand,
+    backgroundColor: AstroColors.brandTint,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    overflow: "hidden",
+  },
+  // Sliders full-bleed; pehla/aakhri item screen edge se PAD door
+  sliderContent: { paddingHorizontal: PAD, gap: GAP, paddingBottom: 6 },
 
   emptyBox: {
     alignItems: "center",
     paddingVertical: 20,
     paddingHorizontal: 20,
-    backgroundColor: "#FFF",
+    backgroundColor: AstroColors.surface,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#F0E6FF",
+    borderColor: AstroColors.border,
     gap: 4,
   },
   emptyIconCircle: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: "#F9F5FF",
+    backgroundColor: AstroColors.canvas,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 6,
@@ -503,87 +452,31 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: 13.5, fontWeight: "700", color: "#374151" },
   emptySubtext: {
     fontSize: 12,
-    color: "#9CA3AF",
+    color: AstroColors.textMuted,
     textAlign: "center",
     lineHeight: 17,
   },
-
-  horizontalList: { gap: 10, paddingBottom: 4 },
-  postCard: {
-    borderRadius: 14,
-  padding: 14,
-  minHeight: 130,
-  marginHorizontal: 16,   // 👈 add
-  },
-  postCardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 8,
-  },
-  postAvatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.2)",
+  retryBtn: {
+    marginTop: 6,
+    minHeight: 40,
+    paddingHorizontal: 18,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: AstroColors.brand,
     alignItems: "center",
     justifyContent: "center",
   },
-  postAuthor: { fontSize: 12, color: "#FFF", fontWeight: "700", flex: 1 },
-  postContent: { fontSize: 13, color: "#FFF", lineHeight: 19 },
+  retryText: { fontSize: 13, fontWeight: "800", color: AstroColors.brand },
 
-  astroCard: {
-    width: 140,
-    backgroundColor: "#FFF",
-    borderRadius: 14,
-    padding: 12,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#EDE9FF",
-    elevation: 2,
-  },
-  astroAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 8,
-  },
-  astroName: { fontSize: 13, fontWeight: "700", color: "#1F2937" },
-  astroSpeciality: { fontSize: 11, color: "#6B7280", marginTop: 2 },
-  astroPrice: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: "#9d0399",
-    marginTop: 4,
-    marginBottom: 8,
-  },
-  bookBtn: {
-    backgroundColor: "#9d0399",
-    borderRadius: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-  },
-  bookBtnText: { color: "#FFF", fontSize: 11, fontWeight: "700" },
-
-  exploreMoreSection: { paddingTop: 24, paddingHorizontal: 16 },
-  categoryChips: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-  },
+  exploreMoreSection: { paddingTop: 24, paddingHorizontal: PAD },
+  categoryChips: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   categoryChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: "#FFF",
+    backgroundColor: AstroColors.surface,
     borderWidth: 1,
-    borderColor: "#EDE9FF",
+    borderColor: AstroColors.border,
     borderRadius: 20,
     paddingHorizontal: 14,
     paddingVertical: 9,
   },
-  categoryChipEmoji: { fontSize: 14 },
   categoryChipText: { fontSize: 12.5, fontWeight: "600", color: "#4A4468" },
 });

@@ -33,7 +33,9 @@ export const queryKeys = {
     posts: (id: string) => ["astrologer", id, "posts"] as const,
   },
   astrologers: {
-    list: ["astrologers", "list"] as const,
+    // Prefix — saari filtered lists ek saath invalidate karne ke liye
+    all: ["astrologers"] as const,
+    list: (params: object) => ["astrologers", "list", params] as const,
   },
   posts: {
     feed: ["posts", "feed"] as const,
@@ -45,6 +47,10 @@ export const queryKeys = {
   },
   bookings: {
     mine: ["bookings", "mine"] as const,
+  },
+  reviews: {
+    mine: ["reviews", "mine"] as const,
+    forAstrologer: (id: string) => ["reviews", "astrologer", id] as const,
   },
   favorites: {
     ids: (itemType: string) => ["favorites", "ids", itemType] as const,

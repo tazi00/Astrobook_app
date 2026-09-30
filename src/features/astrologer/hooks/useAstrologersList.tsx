@@ -1,34 +1,37 @@
 import { queryKeys } from "@/lib/queryClient";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { astrologersService } from "../services";
-import type { AstrologerProfile } from "../types";
+import type { AstrologerListParams, AstrologerProfile } from "../types";
 
 export type AstrologerListItem = AstrologerProfile;
 
-// React Query cache (30s staleTime) se — pehle plain useState+useEffect tha,
-// har naye mount pe (screen remount ho ya pehli baar visit ho) poori list
-// dobara fetch hoti thi. Ab component lifecycle se independent cache hai,
-// isliye tab revisit hamesha turant aata hai chahe screen kabhi unmount hua
-// ho ya nahi — sirf pehli baar hi real network+DB round trip lagta hai.
-export function useAstrologersList() {
+// Sort / online-offline / search server pe hote hain (GET /astrologers
+// query params), isliye har filter combination ka apna cache entry hai.
+//
+// keepPreviousData: chip ya toggle badalne par list ek pal ke liye khaali
+// hokar spinner nahi dikhati — purani list dikhti rehti hai (thodi dim) jab
+// tak naya result nahi aa jaata. `isSwitching` isi ke liye hai.
+export function useAstrologersList(
+  params: AstrologerListParams = {},
+  options: { enabled?: boolean } = {},
+) {
   const query = useQuery({
-    queryKey: queryKeys.astrologers.list,
-    queryFn: () => astrologersService.getAll(),
+    queryKey: queryKeys.astrologers.list(params),
+    queryFn: () => astrologersService.getAll(params),
+    placeholderData: keepPreviousData,
+    enabled: options.enabled ?? true,
   });
-
-  // Feed screen jaisa hi pattern — mount pe explicit fetchAstrologers() call
-  // hota hai, initial load useQuery khud handle karta hai, yahan sirf
-  // manual refresh ke liye forward karna hai.
-  const fetchAstrologers = () => {
-    query.refetch();
-  };
 
   return {
     astrologers: query.data ?? [],
-    loading: query.isPending,
+    // Sirf pehli baar (koi purana data nahi) — skeleton ke liye
+    loading: query.isPending && options.enabled !== false,
+    // Filter badla, purani list dikh rahi hai, naya aa raha hai
+    isSwitching: query.isPlaceholderData && query.isFetching,
+    refreshing: query.isRefetching && !query.isPlaceholderData,
     error: query.isError
       ? ((query.error as any)?.response?.data?.message ?? "Astrologers load nahi hue")
       : null,
-    fetchAstrologers,
+    refetch: query.refetch,
   };
 }

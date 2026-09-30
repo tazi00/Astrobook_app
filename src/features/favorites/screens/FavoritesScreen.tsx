@@ -1,6 +1,10 @@
 import ScreenHeader from "@/components/ScreenHeader";
+import { AstroColors, AstroRadius } from "@/constants/astro-theme";
+import AstrologerCard from "@/features/astrologer/components/AstrologerCard";
+import type { AstrologerProfile } from "@/features/astrologer/types";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -14,7 +18,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import FavoriteButton from "../components/FavoriteButton";
 import { useFavoritesList } from "../hooks/useFavorites";
-import type { FavoriteItem } from "../types";
+import type { FavoriteItem, FavoriteItemType } from "../types";
 
 function FavoriteCard({ item }: { item: FavoriteItem }) {
   const router = useRouter();
@@ -60,9 +64,52 @@ function FavoriteCard({ item }: { item: FavoriteItem }) {
   );
 }
 
+const TABS: { key: FavoriteItemType; label: string }[] = [
+  { key: "astrologer", label: "Astrologers" },
+  { key: "service", label: "Consultations" },
+];
+
 export default function FavoritesScreen() {
-  const { data, isLoading, isError, refetch, isRefetching } =
-    useFavoritesList("service");
+  // Astrologers pehle — "woh astrologer jo pasand aaya tha" sabse zyada
+  // dhundha jaane wala case hai
+  const [tab, setTab] = useState<FavoriteItemType>("astrologer");
+
+  const services = useFavoritesList("service", { enabled: tab === "service" });
+  const astrologers = useFavoritesList("astrologer", { enabled: tab === "astrologer" });
+
+  // Card ko AstrologerProfile chahiye (favourites API phone nahi bhejti)
+  const astrologerItems = useMemo<AstrologerProfile[]>(
+    () => (astrologers.data ?? []).map((i) => ({ ...i.astrologer, phone: null })),
+    [astrologers.data],
+  );
+
+  const active = tab === "astrologer" ? astrologers : services;
+  const count = tab === "astrologer" ? astrologerItems.length : (services.data?.length ?? 0);
+
+  const emptyView = (
+    <View style={styles.center}>
+      <View style={styles.emptyIcon}>
+        <Feather name="heart" size={30} color="#9d0399" />
+      </View>
+      <Text style={styles.emptyTitle}>
+        {tab === "astrologer" ? "Abhi koi astrologer save nahi hai" : "Abhi kuch favourite nahi hai"}
+      </Text>
+      <Text style={styles.emptyText}>
+        {tab === "astrologer"
+          ? "Astrologer ke card pe heart dabao, wo yahin jama ho jayega — baad me dhundhna nahi padega."
+          : "Koi consultation pasand aaye to uspe heart dabao, wo yahin jama ho jaayegi."}
+      </Text>
+    </View>
+  );
+
+  const refreshControl = (
+    <RefreshControl
+      refreshing={active.isRefetching}
+      onRefresh={active.refetch}
+      colors={["#9d0399"]}
+      tintColor="#9d0399"
+    />
+  );
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -72,47 +119,56 @@ export default function FavoritesScreen() {
         fallbackHref="/(user)/(tabs)/feed"
       />
 
-      {isLoading ? (
+      <View style={styles.segment} accessibilityRole="tablist">
+        {TABS.map((t) => {
+          const selected = tab === t.key;
+          return (
+            <TouchableOpacity
+              key={t.key}
+              style={[styles.segmentItem, selected && styles.segmentItemActive]}
+              onPress={() => setTab(t.key)}
+              activeOpacity={0.85}
+              accessibilityRole="tab"
+              accessibilityState={{ selected }}
+            >
+              <Text style={[styles.segmentText, selected && styles.segmentTextActive]}>
+                {t.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {active.isLoading ? (
         <View style={styles.center}>
           <ActivityIndicator color="#9d0399" size="large" />
         </View>
-      ) : isError ? (
+      ) : active.isError ? (
         <View style={styles.center}>
           <Text style={styles.emptyText}>Favourites load nahi hue</Text>
-          <TouchableOpacity style={styles.retryBtn} onPress={() => refetch()}>
+          <TouchableOpacity style={styles.retryBtn} onPress={() => active.refetch()}>
             <Text style={styles.retryText}>Dobara try karo</Text>
           </TouchableOpacity>
         </View>
+      ) : tab === "astrologer" ? (
+        <FlatList
+          data={astrologerItems}
+          keyExtractor={(a) => a.id}
+          renderItem={({ item }) => <AstrologerCard astrologer={item} />}
+          contentContainerStyle={[styles.list, count === 0 && { flexGrow: 1 }]}
+          showsVerticalScrollIndicator={false}
+          refreshControl={refreshControl}
+          ListEmptyComponent={emptyView}
+        />
       ) : (
         <FlatList
-          data={data ?? []}
+          data={services.data ?? []}
           keyExtractor={(i) => i.id}
           renderItem={({ item }) => <FavoriteCard item={item} />}
-          contentContainerStyle={[
-            styles.list,
-            (data?.length ?? 0) === 0 && { flexGrow: 1 },
-          ]}
+          contentContainerStyle={[styles.list, count === 0 && { flexGrow: 1 }]}
           showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefetching}
-              onRefresh={refetch}
-              colors={["#9d0399"]}
-              tintColor="#9d0399"
-            />
-          }
-          ListEmptyComponent={
-            <View style={styles.center}>
-              <View style={styles.emptyIcon}>
-                <Feather name="heart" size={30} color="#9d0399" />
-              </View>
-              <Text style={styles.emptyTitle}>Abhi kuch favourite nahi hai</Text>
-              <Text style={styles.emptyText}>
-                Koi consultation pasand aaye to uspe heart dabao, wo yahin jama
-                ho jaayegi.
-              </Text>
-            </View>
-          }
+          refreshControl={refreshControl}
+          ListEmptyComponent={emptyView}
         />
       )}
     </SafeAreaView>
@@ -121,6 +177,24 @@ export default function FavoritesScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#F5F0FF" },
+  segment: {
+    flexDirection: "row",
+    marginHorizontal: 16,
+    marginTop: 14,
+    padding: 3,
+    borderRadius: AstroRadius.md,
+    backgroundColor: AstroColors.brandTint,
+  },
+  segmentItem: {
+    flex: 1,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: AstroRadius.sm + 1,
+  },
+  segmentItemActive: { backgroundColor: AstroColors.brand },
+  segmentText: { fontSize: 13, fontWeight: "700", color: AstroColors.textSecondary },
+  segmentTextActive: { color: AstroColors.onBrand },
   list: { padding: 16, gap: 12 },
   center: {
     flex: 1,

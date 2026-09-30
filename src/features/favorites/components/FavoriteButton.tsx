@@ -1,3 +1,4 @@
+import { AstroColors } from "@/constants/astro-theme";
 import { Ionicons } from "@expo/vector-icons";
 import { StyleProp, StyleSheet, TouchableOpacity, ViewStyle } from "react-native";
 import { useFavoriteIds, useToggleFavorite } from "../hooks/useFavorites";
@@ -27,12 +28,15 @@ export default function FavoriteButton({
       style={[styles.btn, style]}
       activeOpacity={0.7}
       hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel={isFavorite ? "Favourites se hatao" : "Favourites me jodo"}
+      accessibilityState={{ selected: isFavorite }}
       onPress={() => toggle.mutate({ itemId, isFavorite })}
     >
       <Ionicons
         name={isFavorite ? "heart" : "heart-outline"}
         size={size}
-        color="#9d0399"
+        color={AstroColors.brand}
       />
     </TouchableOpacity>
   );

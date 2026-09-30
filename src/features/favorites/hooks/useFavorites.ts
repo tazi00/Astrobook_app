@@ -6,7 +6,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { favoritesService } from "../service";
-import type { FavoriteItem, FavoriteItemType } from "../types";
+import type { FavoriteItemFor, FavoriteItemType } from "../types";
 
 // Sirf ids — har card/heart ek hi cached list se apni state padhta hai,
 // isliye 20 cards = 1 network call.
@@ -17,11 +17,16 @@ export function useFavoriteIds(itemType: FavoriteItemType = "service") {
   });
 }
 
-// Favourites screen ki enriched list
-export function useFavoritesList(itemType: FavoriteItemType = "service") {
+// Favourites screen ki enriched list. `enabled: false` se tab ka data tab hi
+// fetch hota hai jab tab khule (ya "Saved" chip dabe).
+export function useFavoritesList<T extends FavoriteItemType = "service">(
+  itemType: T = "service" as T,
+  options: { enabled?: boolean } = {},
+) {
   return useQuery({
     queryKey: queryKeys.favorites.list(itemType),
     queryFn: () => favoritesService.getList(itemType),
+    enabled: options.enabled ?? true,
   });
 }
 
@@ -47,13 +52,13 @@ export function useToggleFavorite(itemType: FavoriteItemType = "service") {
     onMutate: async ({ itemId, isFavorite }) => {
       await queryClient.cancelQueries({ queryKey: idsKey });
       const prevIds = queryClient.getQueryData<string[]>(idsKey);
-      const prevList = queryClient.getQueryData<FavoriteItem[]>(listKey);
+      const prevList = queryClient.getQueryData<FavoriteItemFor<FavoriteItemType>[]>(listKey);
 
       queryClient.setQueryData<string[]>(idsKey, (old = []) =>
         isFavorite ? old.filter((id) => id !== itemId) : [...old, itemId],
       );
       if (isFavorite) {
-        queryClient.setQueryData<FavoriteItem[]>(listKey, (old) =>
+        queryClient.setQueryData<FavoriteItemFor<FavoriteItemType>[]>(listKey, (old) =>
           old?.filter((i) => i.itemId !== itemId),
         );
       }

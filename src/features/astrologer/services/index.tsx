@@ -1,6 +1,10 @@
 import { apiClient } from "@/services/apiClient";
 import type { ConsultationService } from "@/features/consultation/types";
-import type { AstrologerProfile, AstrologerSlot } from "../types";
+import type {
+  AstrologerListParams,
+  AstrologerProfile,
+  AstrologerSlot,
+} from "../types";
 
 class AstrologersServiceApi {
   private readonly base = "/astrologers";
@@ -9,9 +13,12 @@ class AstrologersServiceApi {
   // { slots } directly — NOT wrapped in { success, data } like consultation
   // module endpoints. apiClient's return value IS this raw object.
 
-  async getAll(): Promise<AstrologerProfile[]> {
+  async getAll(params: AstrologerListParams = {}): Promise<AstrologerProfile[]> {
+    // Khaali q server ko mat bhejo
+    const { q, ...rest } = params;
     const res = await apiClient.get<{ astrologers: AstrologerProfile[] }>(
       this.base,
+      { params: q ? { ...rest, q } : rest },
     );
     return (res as any).astrologers;
   }

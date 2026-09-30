@@ -1,5 +1,5 @@
 import { apiClient } from "@/services/apiClient";
-import type { FavoriteItem, FavoriteItemType } from "../types";
+import type { FavoriteItemFor, FavoriteItemType } from "../types";
 
 class FavoritesServiceApi {
   private readonly base = "/favorites";
@@ -12,8 +12,8 @@ class FavoritesServiceApi {
     await apiClient.delete(`${this.base}/${itemType}/${itemId}`);
   }
 
-  async getList(itemType: FavoriteItemType): Promise<FavoriteItem[]> {
-    const res = await apiClient.get<{ items: FavoriteItem[] }>(
+  async getList<T extends FavoriteItemType>(itemType: T): Promise<FavoriteItemFor<T>[]> {
+    const res = await apiClient.get<{ items: FavoriteItemFor<T>[] }>(
       `${this.base}?itemType=${itemType}`,
     );
     return res.data.items;

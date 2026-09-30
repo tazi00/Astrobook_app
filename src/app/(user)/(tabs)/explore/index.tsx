@@ -1,13 +1,21 @@
 import Header from "@/components/header";
+import {
+  AstroColors,
+  AstroRadius,
+  AstroType,
+} from "@/constants/astro-theme";
+import CategoryCard from "@/features/categories/components/CategoryCard";
 import { useCategories } from "@/features/categories/hooks/useCategories";
-import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { Feather } from "@expo/vector-icons";
+import { useNavigation, useRouter } from "expo-router";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -15,8 +23,8 @@ import {
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const GAP = 12;
 const PADDING = 16;
-const CARD_WIDTH = (SCREEN_WIDTH - PADDING * 2 - GAP) / 2;
-const CARD_HEIGHT = CARD_WIDTH * 0.75;
+const CARD_WIDTH = Math.floor((SCREEN_WIDTH - PADDING * 2 - GAP) / 2);
+const CARD_HEIGHT = Math.round(CARD_WIDTH * 0.82);
 
 const INITIAL_COUNT = 6;
 
@@ -24,6 +32,7 @@ export default function ExploreScreen() {
   const router = useRouter();
   const [activeFilter, setActiveFilter] = useState("all");
   const [showAll, setShowAll] = useState(false);
+  const [query, setQuery] = useState("");
 
   const { filters, categories, loading, error, fetchCategories } =
     useCategories();
@@ -32,165 +41,207 @@ export default function ExploreScreen() {
     fetchCategories();
   }, []);
 
-  const filtered =
-    activeFilter === "all"
-      ? categories
-      : categories.filter((c) => c.filter === activeFilter);
+  // Explore tab chhodte hi filter/search/show-all reset — wapas aane par hamesha
+  // fresh "All" state. (Category detail se back aane par reset NAHI hota, kyunki
+  // tab blur nahi hua — sirf tab badalne par hota hai.)
+  const navigation = useNavigation();
+  useEffect(() => {
+    const tabRoute = navigation.getParent();
+    if (!tabRoute) return;
+    return tabRoute.addListener("blur", () => {
+      setActiveFilter("all");
+      setQuery("");
+      setShowAll(false);
+    });
+  }, [navigation]);
 
-  const displayed = showAll ? filtered : filtered.slice(0, INITIAL_COUNT);
+  const q = query.trim().toLowerCase();
+  const searching = q.length > 0;
 
-  // Group into rows of 2
-  const rows: (typeof categories)[number][][] = [];
-  for (let i = 0; i < displayed.length; i += 2) {
-    rows.push(displayed.slice(i, i + 2));
-  }
+  const filtered = useMemo(() => {
+    const byFilter =
+      activeFilter === "all"
+        ? categories
+        : categories.filter((c) => c.filter === activeFilter);
+    return searching
+      ? byFilter.filter((c) => c.label.toLowerCase().includes(q))
+      : byFilter;
+  }, [categories, activeFilter, q, searching]);
+
+  // Search karte waqt saare matches dikhao ("Show more" ke peeche nahi chhupao)
+  const displayed =
+    showAll || searching ? filtered : filtered.slice(0, INITIAL_COUNT);
+
+  const open = (id: string, label: string) =>
+    router.push({
+      pathname: "/(user)/explore/[category]" as any,
+      params: { category: id, label },
+    });
 
   return (
     <View style={styles.root}>
       <Header />
 
-      {/* Filter Tabs */}
-      <View style={styles.filterWrapper}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filtersRow}
-        >
-          {filters.map((f) => (
-            <TouchableOpacity
-              key={f.id}
-              style={[
-                styles.filterChip,
-                activeFilter === f.id && styles.filterChipActive,
-              ]}
-              onPress={() => {
-                setActiveFilter(f.id);
-                setShowAll(false);
-              }}
-            >
-              <Text
-                style={[
-                  styles.filterChipText,
-                  activeFilter === f.id && styles.filterChipTextActive,
-                ]}
-              >
-                {f.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={styles.content}
+      >
+        <View style={styles.titleBlock}>
+          <Text style={styles.title}>Explore</Text>
+          <Text style={styles.subtitle}>
+            Kis vishay me margdarshan chahiye?
+          </Text>
+        </View>
 
-      {loading ? (
-        <ActivityIndicator color="#9d0399" style={{ marginTop: 40 }} />
-      ) : error ? (
-        <Text style={styles.emptyText}>{error}</Text>
-      ) : (
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.content}
-        >
-          {/* Grid */}
-          {rows.map((row, rowIndex) => (
-            <View key={rowIndex} style={styles.row}>
-              {row.map((cat) => (
-                <TouchableOpacity
-                  key={cat.id}
-                  style={[styles.card, { backgroundColor: cat.color }]}
-                  activeOpacity={0.85}
-                  onPress={() =>
-                    router.push({
-                      pathname: "/(user)/explore/[category]" as any,
-                      params: { category: cat.id, label: cat.label },
-                    })
-                  }
-                >
-                  <Text style={styles.cardEmoji}>{cat.emoji}</Text>
-                  <Text style={styles.cardLabel}>{cat.label}</Text>
-                </TouchableOpacity>
-              ))}
-              {/* Empty placeholder if odd number */}
-              {row.length === 1 && <View style={styles.cardEmpty} />}
-            </View>
-          ))}
-
-          {/* Show More */}
-          {!showAll && filtered.length > INITIAL_COUNT && (
+        {/* Search */}
+        <View style={styles.searchBox}>
+          <Feather name="search" size={17} color={AstroColors.textMuted} />
+          <TextInput
+            style={styles.searchInput}
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Category dhundo — Tarot, Vastu, Kundli…"
+            placeholderTextColor={AstroColors.textMuted}
+            returnKeyType="search"
+            autoCorrect={false}
+            accessibilityLabel="Category search"
+          />
+          {query.length > 0 && (
             <TouchableOpacity
-              style={styles.showMoreBtn}
-              onPress={() => setShowAll(true)}
+              hitSlop={10}
+              onPress={() => setQuery("")}
+              accessibilityLabel="Search saaf karo"
             >
-              <Text style={styles.showMoreText}>Show more</Text>
-              <Text style={styles.showMoreArrow}>↓</Text>
+              <Feather name="x" size={17} color={AstroColors.textMuted} />
             </TouchableOpacity>
           )}
+        </View>
 
-          <View style={{ height: 32 }} />
-        </ScrollView>
-      )}
+        {/* Filter chips */}
+        {filters.length > 0 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filtersRow}
+            style={styles.filtersScroll}
+          >
+            {filters.map((f) => {
+              const active = activeFilter === f.id;
+              return (
+                <TouchableOpacity
+                  key={f.id}
+                  style={[styles.chip, active && styles.chipActive]}
+                  onPress={() => {
+                    setActiveFilter(f.id);
+                    setShowAll(false);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                >
+                  <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                    {f.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        )}
+
+        {loading ? (
+          <ActivityIndicator color={AstroColors.brand} style={{ marginTop: 40 }} />
+        ) : error ? (
+          <TouchableOpacity onPress={fetchCategories}>
+            <Text style={styles.emptyText}>{error} — dobara try karo</Text>
+          </TouchableOpacity>
+        ) : displayed.length === 0 ? (
+          <View style={styles.empty}>
+            <Text style={styles.emptyTitle}>Koi category nahi mili</Text>
+            <Text style={styles.emptyText}>
+              {searching ? `"${query.trim()}" se kuch match nahi hua` : "Abhi yahan kuch nahi hai"}
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.grid}>
+            {displayed.map((cat) => (
+              <CategoryCard
+                key={cat.id}
+                category={cat}
+                width={CARD_WIDTH}
+                height={CARD_HEIGHT}
+                onPress={() => open(cat.id, cat.label)}
+              />
+            ))}
+          </View>
+        )}
+
+        {!loading && !searching && !showAll && filtered.length > INITIAL_COUNT && (
+          <TouchableOpacity
+            style={styles.showMoreBtn}
+            onPress={() => setShowAll(true)}
+            accessibilityRole="button"
+          >
+            <Text style={styles.showMoreText}>
+              Sab {filtered.length} dekho
+            </Text>
+            <Feather name="chevron-down" size={16} color={AstroColors.brand} />
+          </TouchableOpacity>
+        )}
+
+        <View style={{ height: 32 }} />
+      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  emptyText: {
-    fontSize: 13,
-    color: "#9CA3AF",
-    textAlign: "center",
-    marginTop: 40,
-  },
-  root: { flex: 1, backgroundColor: "#F9F5FF" },
+  root: { flex: 1, backgroundColor: AstroColors.canvas },
+  content: { paddingHorizontal: PADDING, paddingTop: 18 },
 
-  // Filter tabs
-  filterWrapper: {
-    backgroundColor: "#FFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#EDE9FF",
-  },
-  filtersRow: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 8,
-  },
-  filterChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 7,
-    borderRadius: 20,
-    backgroundColor: "#F9F5FF",
-    borderWidth: 1.5,
-    borderColor: "#EDE9FF",
-  },
-  filterChipActive: {
-    backgroundColor: "#9d0399",
-    borderColor: "#9d0399",
-  },
-  filterChipText: { fontSize: 13, color: "#666", fontWeight: "500" },
-  filterChipTextActive: { color: "#FFF", fontWeight: "700" },
+  titleBlock: { marginBottom: 14 },
+  title: { ...AstroType.title, fontSize: 26, color: AstroColors.ink },
+  subtitle: { ...AstroType.body, color: AstroColors.textSecondary, marginTop: 2 },
 
-  // Grid
-  content: { padding: PADDING, gap: GAP },
-  row: { flexDirection: "row", gap: GAP },
-  card: {
-    width: CARD_WIDTH,
-    height: CARD_HEIGHT,
-    borderRadius: 16,
+  searchBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: AstroColors.surface,
+    borderWidth: 1,
+    borderColor: AstroColors.border,
+    borderRadius: AstroRadius.pill,
+    paddingHorizontal: 16,
+    minHeight: 46,
+  },
+  searchInput: { flex: 1, fontSize: 14, color: AstroColors.text, paddingVertical: 8 },
+
+  filtersScroll: { marginTop: 12, marginHorizontal: -PADDING },
+  filtersRow: { paddingHorizontal: PADDING, gap: 8 },
+  chip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: AstroRadius.pill,
+    backgroundColor: AstroColors.surface,
+    borderWidth: 1,
+    borderColor: AstroColors.border,
+  },
+  chipActive: { backgroundColor: AstroColors.brand, borderColor: AstroColors.brand },
+  chipText: { fontSize: 13, color: AstroColors.textSecondary, fontWeight: "600" },
+  chipTextActive: { color: AstroColors.onBrand, fontWeight: "800" },
+
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: GAP, marginTop: 16 },
+
+  showMoreBtn: {
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    elevation: 2,
+    gap: 4,
+    minHeight: 44,
+    marginTop: 12,
   },
-  cardEmpty: { width: CARD_WIDTH },
-  cardEmoji: { fontSize: 36 },
-  cardLabel: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#FFF",
-    textAlign: "center",
-    paddingHorizontal: 8,
-  },
+  showMoreText: { fontSize: 14, color: AstroColors.brand, fontWeight: "700" },
 
-  // Show more
-  showMoreBtn: { alignItems: "center", paddingVertical: 16, gap: 4 },
-  showMoreText: { fontSize: 14, color: "#9d0399", fontWeight: "600" },
-  showMoreArrow: { fontSize: 16, color: "#9d0399" },
+  empty: { alignItems: "center", marginTop: 48, gap: 4 },
+  emptyTitle: { ...AstroType.heading, color: AstroColors.ink },
+  emptyText: { fontSize: 13, color: AstroColors.textMuted, textAlign: "center", marginTop: 4 },
 });

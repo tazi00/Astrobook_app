@@ -107,7 +107,10 @@ export default function TabsLayout() {
       screenOptions={{ headerShown: false }}
     >
       <Tabs.Screen name="feed" />
-      <Tabs.Screen name="explore" />
+      {/* Explore ka apna nested stack hai (index -> [category]). Tab chhodte hi
+          usse root pe pop karo, warna Home se wapas aane par purani category
+          detail page hi khulta tha. */}
+      <Tabs.Screen name="explore" options={{ popToTopOnBlur: true }} />
       <Tabs.Screen name="astroverse" />
       <Tabs.Screen name="astrologers" />
       <Tabs.Screen name="profile" />

@@ -2,6 +2,19 @@ import Header from "@/components/header";
 import UserAvatar from "@/components/UserAvatar";
 import { useAstrologerProfile } from "@/features/astrologer/hooks/useAstrologerProfile";
 import { useUser } from "@/features/auth/store/auth.store";
+import FavoriteButton from "@/features/favorites/components/FavoriteButton";
+import ProfileAbout from "@/features/astrologer/components/ProfileAbout";
+import {
+  experienceLabel,
+  formatCount,
+  formatDuration,
+  formatPrice,
+  formatRating,
+} from "@/features/astrologer/utils/cardFormat";
+import ProfilePostTile from "@/features/posts/components/ProfilePostTile";
+import { AstroColors } from "@/constants/astro-theme";
+import { Ionicons } from "@expo/vector-icons";
+import AstrologerReviewsSection from "@/features/reviews/components/AstrologerReviewsSection";
 import { useFollowStatus, useFollowCounts } from "@/features/follows/hooks/useFollow";
 import { useAstrologerPosts } from "@/features/posts/hooks/useFeed";
 import { Feather } from "@expo/vector-icons";
@@ -23,27 +36,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const ITEM_WIDTH = SCREEN_WIDTH * 0.62;
 const ITEM_GAP = 12;
-
-function StarRating({ rating }: { rating: number }) {
-  return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
-      {[1, 2, 3, 4, 5].map((i) => (
-        <Text
-          key={i}
-          style={{
-            fontSize: 13,
-            color: i <= Math.floor(rating) ? "#9d0399" : "#E5E7EB",
-          }}
-        >
-          ★
-        </Text>
-      ))}
-      <Text style={{ fontSize: 12, color: "#9d0399", marginLeft: 4 }}>
-        {rating}
-      </Text>
-    </View>
-  );
-}
+const POST_TILE = Math.floor((SCREEN_WIDTH - 32 - 12) / 2);
 
 export default function AstrologerProfileScreen() {
   const router = useRouter();
@@ -83,6 +76,7 @@ export default function AstrologerProfileScreen() {
 
   const flatListRef = useRef<FlatList>(null);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [showAllPosts, setShowAllPosts] = useState(false);
 
   if (loading || !astrologer) {
     return (
@@ -102,12 +96,27 @@ export default function AstrologerProfileScreen() {
   // meta abhi optional hai (astrologer ne profile complete nahi ki ho sakti)
   const meta = astrologer.meta;
   const displayName = astrologer.name ?? "Astrologer";
-  const speciality = meta?.speciality ?? "Astrologer";
-  const languages = meta?.languages ?? "—";
-  const experience = meta?.exp ?? "New";
-  const rating = meta?.rating ?? 0;
-  const reviews = meta?.reviews ?? 0;
-  const bio = meta?.about;
+  // Naye backend fields pehle, purana `meta.*` sirf fallback (app naye
+  // backend se pehle deploy ho jaye to bhi screen na toote)
+  const expertise =
+    astrologer.categories && astrologer.categories.length > 0
+      ? astrologer.categories
+      : meta?.speciality
+        ? [meta.speciality]
+        : [];
+  const languages =
+    astrologer.languages && astrologer.languages.length > 0
+      ? astrologer.languages.join(", ")
+      : (meta?.languages ?? "");
+  const experience =
+    experienceLabel(astrologer.experienceYears) ??
+    (meta?.exp && meta.exp !== "New" ? meta.exp : null);
+  const rating = astrologer.rating ?? meta?.rating ?? 0;
+  const reviews = astrologer.totalReviews ?? meta?.reviews ?? 0;
+  const isOnline = astrologer.isOnline ?? meta?.online ?? false;
+  const bio = astrologer.bio ?? meta?.about ?? null;
+  const basicPriceLabel = formatPrice(basicService?.price);
+  const basicDuration = formatDuration(basicService?.durationMinutes);
 
   const scrollToNext = () => {
     if (activeIndex < normalServices.length - 1) {
@@ -152,6 +161,13 @@ export default function AstrologerProfileScreen() {
       >
         {/* Profile Header Card */}
         <View style={styles.headerCard}>
+          {!isOwnProfile && (
+            <FavoriteButton
+              itemId={astrologer.id}
+              itemType="astrologer"
+              style={styles.heartBtn}
+            />
+          )}
           <View style={styles.topRow}>
             {/* Avatar & Follow */}
             <View style={styles.profileSidebar}>
@@ -183,15 +199,66 @@ export default function AstrologerProfileScreen() {
 
             {/* Info */}
             <View style={styles.infoColumn}>
-              <Text style={styles.name}>{displayName}</Text>
-              <Text style={styles.speciality}>{speciality}</Text>
-              <Text style={styles.language}>{languages}</Text>
-              <Text style={styles.exp}>Exp: {experience}</Text>
+              <View style={styles.nameRow}>
+                <Text style={styles.name} numberOfLines={2}>
+                  {displayName}
+                </Text>
+                {astrologer.isVerified ? (
+                  <Ionicons name="checkmark-circle" size={16} color={AstroColors.brand} />
+                ) : null}
+              </View>
+
+              <View style={styles.statusRow}>
+                <View
+                  style={[
+                    styles.statusDot,
+                    { backgroundColor: isOnline ? AstroColors.success : AstroColors.offline },
+                  ]}
+                />
+                <Text
+                  style={[
+                    styles.statusText,
+                    { color: isOnline ? AstroColors.successDark : AstroColors.textMuted },
+                  ]}
+                >
+                  {isOnline ? "Abhi available" : "Offline"}
+                </Text>
+              </View>
 
               <View style={styles.ratingRow}>
-                <StarRating rating={rating} />
-                <Text style={styles.reviewCount}>{reviews} reviews</Text>
+                {reviews > 0 ? (
+                  <>
+                    <Ionicons name="star" size={14} color={AstroColors.gold} />
+                    <Text style={styles.ratingValue}>{formatRating(rating)}</Text>
+                    <Text style={styles.reviewCount}>
+                      · {reviews} review{reviews === 1 ? "" : "s"}
+                    </Text>
+                  </>
+                ) : (
+                  <View style={styles.newPill}>
+                    <Text style={styles.newPillText}>New on AstroBook</Text>
+                  </View>
+                )}
               </View>
+
+              {(experience || languages) && (
+                <View style={styles.metaLine}>
+                  {experience ? (
+                    <View style={styles.metaItem}>
+                      <Ionicons name="briefcase-outline" size={13} color={AstroColors.textSecondary} />
+                      <Text style={styles.metaText}>{experience}</Text>
+                    </View>
+                  ) : null}
+                  {languages ? (
+                    <View style={[styles.metaItem, { flexShrink: 1 }]}>
+                      <Ionicons name="language-outline" size={13} color={AstroColors.textSecondary} />
+                      <Text style={styles.metaText} numberOfLines={1}>
+                        {languages}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+              )}
 
               <View style={styles.followStatsRow}>
                 <TouchableOpacity
@@ -209,7 +276,7 @@ export default function AstrologerProfileScreen() {
                 >
                   <Text style={styles.followStatText}>
                     <Text style={styles.followStatCount}>
-                      {followCounts?.followers ?? 0}
+                      {formatCount(followCounts?.followers)}
                     </Text>{" "}
                     Followers
                   </Text>
@@ -247,7 +314,8 @@ export default function AstrologerProfileScreen() {
                 >
                   <View style={styles.bookPriceBox}>
                     <Text style={styles.bookPriceText}>
-                      ₹{basicService.price ?? "—"}
+                      {basicPriceLabel ?? "—"}
+                      {basicDuration ? ` · ${basicDuration}` : ""}
                     </Text>
                   </View>
                   <View style={styles.bookActionBox}>
@@ -262,15 +330,7 @@ export default function AstrologerProfileScreen() {
             </View>
           </View>
 
-          {/* Bio */}
-          {bio ? (
-            <View style={styles.bioContainer}>
-              <Text style={styles.bioText}>
-                {bio}
-                <Text style={styles.seeMoreLink}> See more...</Text>
-              </Text>
-            </View>
-          ) : null}
+          <ProfileAbout expertise={expertise} bio={bio} />
         </View>
 
         {/* Consultations Section */}
@@ -313,9 +373,17 @@ export default function AstrologerProfileScreen() {
                     onPress={() => goToServiceDetail(item.id)}
                   >
                     <View style={styles.consultImageArea}>
-                      <Text style={styles.consultImageEmoji}>
-                        {meta?.emoji ?? "🔮"}
-                      </Text>
+                      {item.coverImage ? (
+                        <Image
+                          source={{ uri: item.coverImage }}
+                          style={StyleSheet.absoluteFill}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <Text style={styles.consultImageEmoji}>
+                          {meta?.emoji ?? "🔮"}
+                        </Text>
+                      )}
                     </View>
                     <View style={styles.consultContent}>
                       <Text style={styles.consultName} numberOfLines={1}>
@@ -370,51 +438,51 @@ export default function AstrologerProfileScreen() {
           )}
         </View>
 
+        <AstrologerReviewsSection astrologerId={astrologer.id} />
+
         {/* Posts Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Posts by {displayName}</Text>
+            <Text style={styles.sectionTitle}>
+              Posts{posts.length > 0 ? ` (${posts.length})` : ""}
+            </Text>
           </View>
 
           {postsLoading ? (
-            <ActivityIndicator color="#9d0399" style={{ marginTop: 12 }} />
+            <ActivityIndicator color={AstroColors.brand} style={{ marginTop: 12 }} />
           ) : posts.length === 0 ? (
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyText}>Koi post nahi hai abhi</Text>
             </View>
           ) : (
-            posts.map((post) => (
-              <TouchableOpacity
-                key={post.id}
-                style={styles.postListCard}
-                activeOpacity={0.9}
-                onPress={() =>
-                  router.push({
-                    pathname: "/(user)/post/[id]" as any,
-                    params: { id: post.id },
-                  })
-                }
-              >
-                {post.mediaType === "IMAGE" && post.mediaUrl && (
-                  <Image
-                    source={{ uri: post.mediaUrl }}
-                    style={styles.postListImage}
+            <>
+              <View style={styles.postGrid}>
+                {(showAllPosts ? posts : posts.slice(0, 4)).map((post) => (
+                  <ProfilePostTile
+                    key={post.id}
+                    post={post}
+                    width={POST_TILE}
+                    onPress={() =>
+                      router.push({
+                        pathname: "/(user)/post/[id]" as any,
+                        params: { id: post.id },
+                      })
+                    }
                   />
-                )}
-                <View style={styles.postListContent}>
-                  <Text style={styles.postListText} numberOfLines={3}>
-                    {post.content}
+                ))}
+              </View>
+              {posts.length > 4 && (
+                <TouchableOpacity
+                  style={styles.moreBtn}
+                  onPress={() => setShowAllPosts((v) => !v)}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.moreBtnText}>
+                    {showAllPosts ? "Kam dikhao" : `Sab ${posts.length} posts dekho`}
                   </Text>
-                  <Text style={styles.postListDate}>
-                    {new Date(post.createdAt).toLocaleDateString("en-IN", {
-                      day: "numeric",
-                      month: "short",
-                      year: "numeric",
-                    })}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))
+                </TouchableOpacity>
+              )}
+            </>
           )}
         </View>
 
@@ -441,6 +509,7 @@ const styles = StyleSheet.create({
     borderColor: "#EDE9FF",
     elevation: 2,
   },
+  heartBtn: { position: "absolute", top: 10, right: 10, zIndex: 5 },
   topRow: { flexDirection: "row", alignItems: "flex-start", gap: 16 },
   profileSidebar: { alignItems: "center", gap: 10, flexShrink: 0 },
   avatarContainer: {
@@ -476,12 +545,30 @@ const styles = StyleSheet.create({
   followStatText: { fontSize: 12.5, color: "#6B7280" },
   followStatCount: { fontWeight: "700", color: "#1A1A2E" },
   infoColumn: { flex: 1 },
-  name: { fontSize: 18, fontWeight: "700", color: "#0b1d5b", marginBottom: 2 },
+  nameRow: { flexDirection: "row", alignItems: "center", gap: 6, paddingRight: 30 },
+  name: { flexShrink: 1, fontSize: 18, fontWeight: "800", color: AstroColors.ink },
+  statusRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 },
+  statusDot: { width: 8, height: 8, borderRadius: 4 },
+  statusText: { fontSize: 12, fontWeight: "700" },
+  ratingValue: { fontSize: 13, fontWeight: "800", color: AstroColors.text },
+  newPill: {
+    backgroundColor: AstroColors.brandTint,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+  },
+  newPillText: { fontSize: 11, fontWeight: "700", color: AstroColors.brandDark },
+  metaLine: { marginTop: 8, gap: 4 },
+  metaItem: { flexDirection: "row", alignItems: "center", gap: 6 },
+  metaText: { fontSize: 12.5, color: AstroColors.textSecondary },
+  postGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
+  moreBtn: { alignItems: "center", justifyContent: "center", minHeight: 44, marginTop: 8 },
+  moreBtnText: { fontSize: 14, fontWeight: "700", color: AstroColors.brand },
   speciality: { fontSize: 13, color: "#6B7280", marginBottom: 1 },
   language: { fontSize: 12, color: "#6B7280", marginBottom: 1 },
   exp: { fontSize: 12, color: "#6B7280", marginBottom: 6 },
-  ratingRow: { flexDirection: "column", alignItems: "flex-start", gap: 4 },
-  reviewCount: { fontSize: 12, color: "#9d0399" },
+  ratingRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 6 },
+  reviewCount: { fontSize: 12, color: AstroColors.textSecondary },
 
   bookBtnWrapper: {
     flexDirection: "row",

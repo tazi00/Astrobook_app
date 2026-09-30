@@ -4,6 +4,10 @@ import { useUser } from "@/features/auth/store/auth.store";
 import { useMyAppointments } from "@/features/consultation/hooks/useAppointments";
 import { consultationService } from "@/features/consultation/service";
 import type { AppointmentDetailed } from "@/features/consultation/types";
+import ReviewModal, { type ReviewTarget } from "@/features/reviews/components/ReviewModal";
+import { StarsRow } from "@/features/reviews/components/Stars";
+import { useMyReviews } from "@/features/reviews/hooks/useReviews";
+import type { MyReview } from "@/features/reviews/types";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
@@ -81,10 +85,14 @@ function BookingCard({
   item,
   onCancel,
   cancelling,
+  myReview,
+  onRate,
 }: {
   item: AppointmentDetailed;
   onCancel: (id: string) => void;
   cancelling: boolean;
+  myReview?: MyReview;
+  onRate: (item: AppointmentDetailed, existing?: MyReview) => void;
 }) {
   const router = useRouter();
   const user = useUser();
@@ -96,6 +104,8 @@ function BookingCard({
   // apna khud ka naam nahi, CLIENT ka naam dikhna chahiye
   const isViewerAstrologer = user?.id === item.astrologerId;
   const otherPartyName = isViewerAstrologer ? item.userName : item.astrologerName;
+  // Rating sirf client apni complete hui session pe de sakta hai
+  const canRate = item.status === "completed" && !isViewerAstrologer;
 
   return (
     <TouchableOpacity
@@ -152,6 +162,44 @@ function BookingCard({
         </View>
       </View>
 
+      {canRate && (
+        <View style={styles.rateRow}>
+          {myReview ? (
+            <>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={styles.rateLabel}>Aapki rating</Text>
+                <StarsRow rating={myReview.rating} size={14} />
+              </View>
+              <TouchableOpacity
+                hitSlop={8}
+                onPress={(e) => {
+                  e.stopPropagation?.();
+                  onRate(item, myReview);
+                }}
+              >
+                <Text style={styles.rateLink}>Edit</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <Text style={[styles.rateLabel, { flex: 1 }]}>
+                Session kaisa raha?
+              </Text>
+              <TouchableOpacity
+                style={styles.rateBtn}
+                onPress={(e) => {
+                  e.stopPropagation?.();
+                  onRate(item);
+                }}
+              >
+                <Feather name="star" size={13} color="#9d0399" />
+                <Text style={styles.rateBtnText}>Rate karo</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+      )}
+
       {(canJoin || canCancel) && (
         <View style={styles.actionsRow}>
           {canJoin && (
@@ -196,11 +244,15 @@ function SectionBlock({
   items,
   onCancel,
   cancellingId,
+  reviews,
+  onRate,
 }: {
   title: string;
   items: AppointmentDetailed[];
   onCancel: (id: string) => void;
   cancellingId: string | null;
+  reviews: Map<string, MyReview>;
+  onRate: (item: AppointmentDetailed, existing?: MyReview) => void;
 }) {
   return (
     <View style={styles.section}>
@@ -221,6 +273,8 @@ function SectionBlock({
             item={item}
             onCancel={onCancel}
             cancelling={cancellingId === item.id}
+            myReview={reviews.get(item.id)}
+            onRate={onRate}
           />
         ))
       )}
@@ -240,6 +294,16 @@ export default function MyBookingsScreen() {
   const { appointments, loading, refreshing, fetchAppointments } =
     useMyAppointments();
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const { byAppointment: myReviews } = useMyReviews();
+  const [reviewTarget, setReviewTarget] = useState<ReviewTarget | null>(null);
+
+  const handleRate = (item: AppointmentDetailed, existing?: MyReview) =>
+    setReviewTarget({
+      appointmentId: item.id,
+      astrologerId: item.astrologerId,
+      astrologerName: item.astrologerName,
+      existing,
+    });
 
   useEffect(() => {
     fetchAppointments();
@@ -342,18 +406,24 @@ export default function MyBookingsScreen() {
                 items={upcomingCombined}
                 onCancel={handleCancel}
                 cancellingId={cancellingId}
+                reviews={myReviews}
+                onRate={handleRate}
               />
               <SectionBlock
                 title="Completed"
                 items={appointments.completed}
                 onCancel={handleCancel}
                 cancellingId={cancellingId}
+                reviews={myReviews}
+                onRate={handleRate}
               />
               <SectionBlock
                 title="Cancelled"
                 items={appointments.cancelled}
                 onCancel={handleCancel}
                 cancellingId={cancellingId}
+                reviews={myReviews}
+                onRate={handleRate}
               />
             </View>
           )}
@@ -361,6 +431,8 @@ export default function MyBookingsScreen() {
           <View style={{ height: 40 }} />
         </ScrollView>
       )}
+
+      <ReviewModal target={reviewTarget} onClose={() => setReviewTarget(null)} />
     </View>
   );
 }
@@ -477,6 +549,30 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   cardMetaText: { fontSize: 11, color: "#6B7280" },
+
+  rateRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#F3E8FF",
+    backgroundColor: "#FDF7FF",
+  },
+  rateLabel: { fontSize: 12, fontWeight: "600", color: "#6B7280" },
+  rateBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    borderWidth: 1.5,
+    borderColor: "#9d0399",
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  rateBtnText: { fontSize: 12, color: "#9d0399", fontWeight: "800" },
+  rateLink: { fontSize: 12, color: "#9d0399", fontWeight: "800" },
 
   actionsRow: {
     flexDirection: "row",

@@ -1,7 +1,9 @@
+import type { AstrologerProfile } from "@/features/astrologer/types";
+
 // Backend `FAVORITE_ITEM_TYPES` (core/database/schema/favorites.ts) ke saath
-// sync rakho. Abhi sirf consultation service; courses/products aane par yahan
-// naya type + FavoriteItem ka naya `service`-jaisa field add hoga.
-export type FavoriteItemType = "service";
+// sync rakho. Abhi consultation service aur astrologer; courses/products aane
+// par yahan naya type + naya item shape add hoga.
+export type FavoriteItemType = "service" | "astrologer";
 
 export type FavoriteService = {
   id: string;
@@ -18,10 +20,26 @@ export type FavoriteService = {
   tags: string[];
 };
 
-export type FavoriteItem = {
+export type FavoriteServiceItem = {
   id: string;
-  itemType: FavoriteItemType;
+  itemType: "service";
   itemId: string;
   createdAt: string;
   service: FavoriteService;
 };
+
+// Favourite astrologer — listing wale card jaisa hi data (phone ke bina)
+export type FavoriteAstrologerItem = {
+  id: string;
+  itemType: "astrologer";
+  itemId: string;
+  createdAt: string;
+  astrologer: Omit<AstrologerProfile, "phone">;
+};
+
+// Purane code ke liye alias — FavoriteItem matlab consultation favourite
+export type FavoriteItem = FavoriteServiceItem;
+
+export type FavoriteItemFor<T extends FavoriteItemType> = T extends "astrologer"
+  ? FavoriteAstrologerItem
+  : FavoriteServiceItem;
