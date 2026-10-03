@@ -4,6 +4,11 @@ import { useUser } from "@/features/auth/store/auth.store";
 import { consultationService } from "@/features/consultation/service";
 import type { ConsultationServiceVariant } from "@/features/consultation/types";
 import { paymentService } from "@/features/payment/service";
+import {
+  classifyPaymentFailure,
+  copyForKind,
+  type PaymentStage,
+} from "@/features/payment/utils/paymentFailure";
 import { Feather } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
@@ -85,6 +90,8 @@ export default function CheckoutScreen() {
     // update nahi hota isi render cycle mein, isliye state pe depend nahi
     // kar sakte the yahan
     let appointmentId: string | null = pendingAppointmentId;
+    // Kis step pe fail hua — failure ka sahi reason batane ke liye
+    let stage: PaymentStage = "booking";
     try {
       // Step 1: Booking "pending" status mein banao — agar pichle attempt
       // se already ban chuki hai toh dobara mat banao
@@ -100,9 +107,11 @@ export default function CheckoutScreen() {
       }
 
       // Step 2: Razorpay order banao
+      stage = "order";
       const order = await paymentService.createOrder(appointmentId);
 
       // Step 3: Razorpay checkout kholo
+      stage = "gateway";
       const result = await RazorpayCheckout.open({
         key: process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID!,
         amount: Math.round(order.amount * 100), // paise mein
@@ -120,6 +129,7 @@ export default function CheckoutScreen() {
 
       // Step 4: Signature backend pe verify karo → appointment confirm +
       // Agora token generate hota hai isi call mein
+      stage = "verify";
       await paymentService.verifyPayment({
         appointmentId,
         razorpayOrderId: result.razorpay_order_id,
@@ -132,38 +142,34 @@ export default function CheckoutScreen() {
         params: { appointmentId },
       });
     } catch (err: any) {
-      // RazorpayCheckout.open() rejects with a RazorpayErrorResponse-shaped
-      // object (code/description, not response.data.message) when the user
-      // cancels or the payment fails — check that before the axios error
-      // shape our own API calls use.
-      const message =
+      const kind = classifyPaymentFailure(err, stage);
+      const copy = copyForKind(kind);
+
+      // Technical detail sirf support/debug ke liye (screen pe collapsed dikhta hai)
+      const detail =
         err?.response?.data?.message ||
         err?.description ||
+        err?.error?.description ||
         err?.message ||
-        "Payment complete nahi ho paya";
+        "";
 
-      // Pehle yahan appointment "pending" hi reh jaata tha (retry ke liye) —
-      // isse My Bookings mein confusing "pending" entries jama ho jaati thin
-      // jinhe user ko khud cancel karna padta tha. Razorpay se koi webhook
-      // bhi nahi aata jab user sirf modal band kar deta hai (koi payment
-      // attempt hi nahi bana), isliye client-side hi turant cancel karte
-      // hain — cart checkout flow mein jo fix kiya tha wahi yahan bhi.
+      // Booking tabhi cancel karte hain jab paisa nahi kata. "verify" fail
+      // mein payment gateway tak ja chuka hota hai — cancel karna galat hoga,
+      // booking pending rakhte hain taaki backend/support reconcile kar sake.
       //
-      // IMPORTANT: yahan `await` zaroori hai (pehle fire-and-forget tha).
-      // Slot-conflict check (`initiateBooking`) 'pending' status waale
-      // appointments ko bhi "already booked" maanta hai, toh agar user turant
-      // "Dobara Try Karo" dabaye aur cancel request abhi DB mein complete
-      // nahi hui, toh naya booking bhi turant "slot already booked" bolke
-      // fail ho jaata — payment-failed screen ka loop ban jaata tha isi wajah se.
-      if (appointmentId) {
+      // `await` zaroori hai: slot-conflict check 'pending' ko bhi "booked"
+      // maanta hai, to turant retry par cancel DB mein pehle complete hona chahiye.
+      if (appointmentId && copy.cancelBooking) {
         await consultationService.cancelAppointment(appointmentId).catch(() => {});
+        setPendingAppointmentId(null);
       }
-      setPendingAppointmentId(null);
 
       router.replace({
         pathname: "/(user)/payment-failed" as any,
         params: {
-          reason: message,
+          kind,
+          detail: typeof detail === "string" ? detail : JSON.stringify(detail),
+          appointmentId: copy.cancelBooking ? undefined : (appointmentId ?? undefined),
           astroId,
           serviceId,
           variantId: variant?.id,

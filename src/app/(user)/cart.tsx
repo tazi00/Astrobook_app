@@ -5,6 +5,11 @@ import { useCart } from "@/features/cart/hooks/useCart";
 import { cartService } from "@/features/cart/service";
 import type { CartItem } from "@/features/cart/types";
 import { consultationService } from "@/features/consultation/service";
+import {
+  classifyPaymentFailure,
+  copyForKind,
+  type PaymentStage,
+} from "@/features/payment/utils/paymentFailure";
 import { Feather } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
@@ -117,12 +122,14 @@ export default function CartScreen() {
     // cancel/fail hone par inhi appointmentIds ko turant cancel karna hai
     // (neeche dekho), state pe depend nahi kar sakte isi render cycle mein
     let createdAppointmentIds: string[] = [];
+    let stage: PaymentStage = "order";
     try {
       const order = await cartService.createCheckoutOrder(
         selectedItems.map((i) => i.id),
       );
       createdAppointmentIds = order.appointmentIds;
 
+      stage = "gateway";
       const result = await RazorpayCheckout.open({
         key: process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID!,
         amount: Math.round(order.amount * 100), // paise mein
@@ -139,6 +146,7 @@ export default function CartScreen() {
       });
 
       // Signature backend pe verify karo → sab appointments confirm hote hain
+      stage = "verify";
       await cartService.verifyCheckout({
         razorpayOrderId: result.razorpay_order_id,
         razorpayPaymentId: result.razorpay_payment_id,
@@ -165,29 +173,35 @@ export default function CartScreen() {
       // nahi hai, isliye pending rakhne ka koi fayda nahi — Razorpay cancel/
       // fail hote hi turant cancel kar dete hain taaki My Bookings mein turant
       // sahi status (Cancelled, na ki 20 min tak Pending) dikhe.
-      if (createdAppointmentIds.length > 0) {
+      const kind = classifyPaymentFailure(err, stage);
+      const copy = copyForKind(kind);
+
+      // Verify fail = paisa gateway tak gaya, bookings cancel NAHI karni
+      if (createdAppointmentIds.length > 0 && copy.cancelBooking) {
         await Promise.all(
           createdAppointmentIds.map((id) =>
             consultationService.cancelAppointment(id).catch(() => {
-              // Cancel bhi fail ho jaye (rare) — stale-pending cron 20 min
-              // mein anyway cleanup kar dega, silently ignore karo
+              // Rare — stale-pending cron 20 min mein cleanup kar dega
             }),
           ),
         );
       }
 
-      const message =
+      const detail =
         err?.response?.data?.message ||
         err?.description ||
+        err?.error?.description ||
         err?.message ||
-        "Payment complete nahi ho paya";
-      Alert.alert(
-        "Payment Nahi Hua",
-        createdAppointmentIds.length > 0
-          ? `${message}\n\nBooking cancel kar di gayi hai — cart mein wapas jaake dobara try kar sakte ho.`
-          : message,
-      );
+        "";
       fetchCart();
+      router.push({
+        pathname: "/(user)/payment-failed" as any,
+        params: {
+          kind,
+          source: "cart",
+          detail: typeof detail === "string" ? detail : JSON.stringify(detail),
+        },
+      });
     } finally {
       setPayingOrder(false);
     }

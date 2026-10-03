@@ -35,7 +35,12 @@ export const AstroColors = {
   successDark: "#15803D",
   successTint: "#DCFCE7",
   danger: "#DC2626",
+  dangerTint: "#FEF2F2",
   offline: "#C4B5E0",
+
+  // Overlays (sheet backdrop, media badges)
+  scrim: "rgba(11,29,91,0.45)",
+  mediaBadge: "rgba(0,0,0,0.5)",
 
   // Gold — stars & Top Choice
   gold: "#F5A623",

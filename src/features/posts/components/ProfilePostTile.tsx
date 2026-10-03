@@ -24,6 +24,10 @@ export default function ProfilePostTile({
 }) {
   const bg = post.bgColor ?? colorForId(post.astrologerId);
   const fg = post.textColor ?? "#FFFFFF";
+  // Chhote tile (jaise detail ke "aur posts") me text tile se bahar na nikle
+  const compact = width < 130;
+  const lineHeight = compact ? 16 : 20;
+  const maxLines = Math.max(2, Math.floor((width - (compact ? 20 : 28) - 18) / lineHeight));
 
   return (
     <TouchableOpacity
@@ -66,9 +70,23 @@ export default function ProfilePostTile({
             ) : null}
           </View>
         ) : (
-          <View style={[StyleSheet.absoluteFill, styles.textFill, { backgroundColor: bg }]}>
+          <View
+            style={[
+              StyleSheet.absoluteFill,
+              styles.textFill,
+              { backgroundColor: bg },
+              compact && { padding: 10 },
+            ]}
+          >
             <View style={styles.textCenter}>
-              <Text style={[styles.textContent, { color: fg }]} numberOfLines={6}>
+              <Text
+                style={[
+                  styles.textContent,
+                  { color: fg },
+                  compact && { fontSize: 12, lineHeight },
+                ]}
+                numberOfLines={maxLines}
+              >
                 {post.content}
               </Text>
             </View>

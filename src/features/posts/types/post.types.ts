@@ -7,6 +7,7 @@ export type Comment = {
   content: string;
   createdAt: string;
   userName: string;
+  userAvatar?: string | null;
 };
 
 export type Post = {
@@ -59,6 +60,14 @@ export type CreatePostPayload = {
   stickerBgColor?: string;
   linkedServiceId?: string;
   tags?: string[];
+};
+
+// Edit: media nahi badalta — sirf caption, categories aur TEXT post ke colours
+export type UpdatePostPayload = {
+  content?: string;
+  tags?: string[];
+  bgColor?: string;
+  textColor?: string;
 };
 
 export type ImageKitAuthToken = {

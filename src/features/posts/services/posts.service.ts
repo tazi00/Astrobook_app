@@ -3,6 +3,7 @@ import type {
   Comment,
   CreatePostPayload,
   ImageKitAuthToken,
+  UpdatePostPayload,
   Post,
 } from "../types/post.types";
 
@@ -44,13 +45,20 @@ class PostsService {
     return res.data.post;
   }
 
-  async getMyPosts(): Promise<Post[]> {
-    const res = await apiClient.get<{ posts: Post[] }>(`${this.base}/my`);
+  async getMyPosts(limit = 12, offset = 0): Promise<Post[]> {
+    const res = await apiClient.get<{ posts: Post[] }>(`${this.base}/my`, {
+      params: { limit, offset },
+    });
     return res.data.posts;
   }
 
   async createPost(payload: CreatePostPayload): Promise<Post> {
     const res = await apiClient.post<{ post: Post }>(this.base, payload);
+    return res.data.post;
+  }
+
+  async updatePost(id: string, payload: UpdatePostPayload): Promise<Post> {
+    const res = await apiClient.patch<{ post: Post }>(`${this.base}/${id}`, payload);
     return res.data.post;
   }
 
@@ -73,9 +81,20 @@ class PostsService {
     await apiClient.delete(`${this.base}/${id}/like`);
   }
 
-  async getComments(id: string): Promise<Comment[]> {
+  // Is category/astrologer ke aur posts (backend: tags overlap, phir same astrologer)
+  async getRelated(id: string, limit = 3): Promise<Post[]> {
+    const res = await apiClient.get<{ posts: Post[] }>(
+      `${this.base}/${id}/related`,
+      { params: { limit } },
+    );
+    return res.data.posts;
+  }
+
+  // Newest first, offset-paginated
+  async getComments(id: string, limit = 20, offset = 0): Promise<Comment[]> {
     const res = await apiClient.get<{ comments: Comment[] }>(
       `${this.base}/${id}/comments`,
+      { params: { limit, offset } },
     );
     return res.data.comments;
   }

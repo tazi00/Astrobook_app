@@ -28,39 +28,6 @@ export function useCreatePost(onSuccess?: (post: Post) => void) {
   return { createPost, loading };
 }
 
-// ─── useMyPosts ───────────────────────────────────────────────────────────────
-
-export function useMyPosts() {
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-
-  const fetchPosts = async (isRefresh = false) => {
-    if (isRefresh) setRefreshing(true);
-    else setLoading(true);
-    try {
-      const data = await postsService.getMyPosts();
-      setPosts(data);
-    } catch {
-      Alert.alert("Error", "Posts load nahi hue");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  const deletePost = async (id: string) => {
-    try {
-      await postsService.deletePost(id);
-      setPosts((prev) => prev.filter((p) => p.id !== id));
-    } catch {
-      Alert.alert("Error", "Post delete nahi hua");
-    }
-  };
-
-  return { posts, loading, refreshing, fetchPosts, deletePost };
-}
-
 // ─── useImageKitUpload ────────────────────────────────────────────────────────
 // ImageKit pe image upload karne ke liye
 

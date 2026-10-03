@@ -1,39 +1,31 @@
 import Header from "@/components/header";
-import UserAvatar from "@/components/UserAvatar";
+import { AstroColors } from "@/constants/astro-theme";
 import { useLogout } from "@/features/auth/hooks/useAuth";
 import { useUser } from "@/features/auth/store/auth.store";
-import { useFollowCounts } from "@/features/follows/hooks/useFollow";
+import LogoutButton from "@/features/profile/components/LogoutButton";
+import ProfileCtaCard from "@/features/profile/components/ProfileCtaCard";
+import ProfileHeroCard from "@/features/profile/components/ProfileHeroCard";
+import ProfileMenu from "@/features/profile/components/ProfileMenu";
+import { useProfileStats } from "@/features/profile/hooks/useProfileStats";
+import { ASTROLOGER_MENU } from "@/features/profile/menu";
 import { useMyProfile } from "@/features/users/hooks/useProfile";
 import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { useState } from "react";
+import { ScrollView, StyleSheet, View } from "react-native";
 
-// Minimalistic — sirf profile-related info. Posts ab /(astrologer)/posts
-// pe hai, dashboard ab /(astrologer)/dashboard pe — yahan duplicate nahi karna.
+// Astrologer ka profile tab — user wale profile jaisa hi look (shared
+// components), upar se dashboard shortcut. Posts /(astrologer)/posts pe hain.
 export function AstrologerProfileView() {
   const router = useRouter();
-  // sessionUser sirf id/name jaisi lightweight cheezon ke liye — avatarUrl
-  // jaisa fresh data (Edit Profile se turant sync) useMyProfile() se aata
-  // hai, isi cache ko Edit Profile screen bhi use karti hai.
   const sessionUser = useUser();
+  // Fresh data (Edit Profile se turant sync) useMyProfile() se
   const { profile } = useMyProfile();
   const user = profile ?? sessionUser;
   const { handleLogout } = useLogout();
   const [loggingOut, setLoggingOut] = useState(false);
-  const { counts: followCounts, fetchCounts } = useFollowCounts(sessionUser?.id);
+  const { stats } = useProfileStats(sessionUser?.id, user?.name, "astrologer");
 
-  useEffect(() => {
-    fetchCounts();
-  }, [sessionUser?.id]);
-
-  const handleLogoutPress = async () => {
+  const onLogout = async () => {
     setLoggingOut(true);
     await handleLogout();
     setLoggingOut(false);
@@ -42,191 +34,34 @@ export function AstrologerProfileView() {
   return (
     <View style={styles.root}>
       <Header />
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* ── Profile Card ── */}
-        <View style={styles.profileCard}>
-          <View style={styles.avatarCircle}>
-            <UserAvatar
-              uri={user?.avatarUrl}
-              name={user?.name}
-              id={sessionUser?.id}
-              size={78}
-            />
-          </View>
-          <Text style={styles.name}>{user?.name ?? "Astrologer"}</Text>
-          {user?.email ? <Text style={styles.email}>{user.email}</Text> : null}
-          {user?.phone ? <Text style={styles.phone}>{user.phone}</Text> : null}
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <ProfileHeroCard
+          id={sessionUser?.id}
+          name={user?.name ?? "Astrologer"}
+          email={user?.email}
+          phone={user?.phone}
+          bio={user?.bio}
+          avatarUrl={user?.avatarUrl}
+          badge="Astrologer"
+          stats={stats}
+          onEdit={() => router.push("/(user)/edit-profile" as any)}
+        />
 
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>⭐ Astrologer</Text>
-          </View>
-
-          <View style={styles.followStatsRow}>
-            <TouchableOpacity
-              style={styles.followStatItem}
-              onPress={() =>
-                router.push({
-                  pathname: "/(user)/follow-list",
-                  params: {
-                    userId: sessionUser?.id,
-                    name: user?.name ?? "Astrologer",
-                    role: "astrologer",
-                    initialTab: "followers",
-                  },
-                } as any)
-              }
-            >
-              <Text style={styles.followStatCount}>
-                {followCounts?.followers ?? 0}
-              </Text>
-              <Text style={styles.followStatLabel}>Followers</Text>
-            </TouchableOpacity>
-            <View style={styles.followStatDivider} />
-            <TouchableOpacity
-              style={styles.followStatItem}
-              onPress={() =>
-                router.push({
-                  pathname: "/(user)/follow-list",
-                  params: {
-                    userId: sessionUser?.id,
-                    name: user?.name ?? "Astrologer",
-                    role: "astrologer",
-                    initialTab: "following",
-                  },
-                } as any)
-              }
-            >
-              <Text style={styles.followStatCount}>
-                {followCounts?.following ?? 0}
-              </Text>
-              <Text style={styles.followStatLabel}>Following</Text>
-            </TouchableOpacity>
-          </View>
-
-          <TouchableOpacity
-            style={styles.editBtn}
-            onPress={() => router.push("/(user)/edit-profile" as any)}
-          >
-            <Text style={styles.editBtnText}>Edit Profile</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Dashboard shortcut */}
-        <TouchableOpacity
-          style={styles.dashboardBtn}
+        <ProfileCtaCard
+          icon="bar-chart-2"
+          title="Go to Dashboard"
+          subtitle="Services, sessions aur earnings"
           onPress={() => router.push("/(astrologer)/dashboard" as any)}
-        >
-          <Text style={styles.dashboardBtnIcon}>📊</Text>
-          <Text style={styles.dashboardBtnText}>Go to Dashboard</Text>
-        </TouchableOpacity>
+        />
 
-        {/* Logout */}
-        <TouchableOpacity
-          style={[styles.logoutBtn, loggingOut && { opacity: 0.6 }]}
-          onPress={handleLogoutPress}
-          disabled={loggingOut}
-        >
-          {loggingOut ? (
-            <View
-              style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
-            >
-              <ActivityIndicator size="small" color="#EF4444" />
-              <Text style={styles.logoutText}>Logging out...</Text>
-            </View>
-          ) : (
-            <Text style={styles.logoutText}>🚪 Logout</Text>
-          )}
-        </TouchableOpacity>
-
-        <View style={{ height: 40 }} />
+        <ProfileMenu items={ASTROLOGER_MENU} onNavigate={(r) => router.push(r as any)} />
+        <LogoutButton loading={loggingOut} onPress={onLogout} />
       </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#F5F0FF" },
-  content: { padding: 16, gap: 16 },
-
-  profileCard: {
-    backgroundColor: "#FFF",
-    borderRadius: 20,
-    padding: 24,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#EDE9FF",
-    elevation: 2,
-  },
-  avatarCircle: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: "#F3E8FF",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 12,
-    borderWidth: 2.5,
-    borderColor: "#9d0399",
-  },
-  avatarEmoji: { fontSize: 40 },
-  name: { fontSize: 20, fontWeight: "800", color: "#1A1A2E", marginBottom: 4 },
-  email: { fontSize: 13, color: "#999", marginBottom: 2 },
-  phone: { fontSize: 13, color: "#999", marginBottom: 10 },
-  badge: {
-    backgroundColor: "#F3E8FF",
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 5,
-    borderWidth: 1,
-    borderColor: "#9d0399",
-    marginBottom: 12,
-  },
-  badgeText: { color: "#9d0399", fontWeight: "700", fontSize: 12 },
-  followStatsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 14,
-  },
-  followStatItem: { alignItems: "center", paddingHorizontal: 18 },
-  followStatDivider: { width: 1, height: 24, backgroundColor: "#EDE9FF" },
-  followStatCount: { fontSize: 16, fontWeight: "800", color: "#1A1A2E" },
-  followStatLabel: { fontSize: 11.5, color: "#9CA3AF", marginTop: 2 },
-  editBtn: {
-    borderWidth: 1.5,
-    borderColor: "#9d0399",
-    borderRadius: 12,
-    paddingHorizontal: 24,
-    paddingVertical: 8,
-  },
-  editBtnText: { color: "#9d0399", fontWeight: "700", fontSize: 14 },
-
-  dashboardBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    backgroundColor: "#9d0399",
-    borderRadius: 14,
-    paddingVertical: 14,
-    elevation: 3,
-    shadowColor: "#9d0399",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-  },
-  dashboardBtnIcon: { fontSize: 18 },
-  dashboardBtnText: { color: "#FFF", fontWeight: "700", fontSize: 14 },
-
-  logoutBtn: {
-    backgroundColor: "#FFF",
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: "center",
-    borderWidth: 1.5,
-    borderColor: "#EF4444",
-  },
-  logoutText: { color: "#EF4444", fontSize: 15, fontWeight: "700" },
+  root: { flex: 1, backgroundColor: AstroColors.canvas },
+  content: { padding: 16, gap: 16, paddingBottom: 40 },
 });

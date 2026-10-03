@@ -41,6 +41,8 @@ export const queryKeys = {
     feed: ["posts", "feed"] as const,
     byId: (id: string) => ["posts", id] as const,
     myPosts: ["posts", "my"] as const,
+    related: (id: string) => ["posts", id, "related"] as const,
+    comments: (id: string) => ["posts", id, "comments"] as const,
   },
   services: {
     mine: ["services", "mine"] as const,

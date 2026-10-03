@@ -1,6 +1,6 @@
 import { queryKeys } from "@/lib/queryClient";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { postsService } from "../services/posts.service";
 import type { Post } from "../types/post.types";
 
@@ -39,8 +39,10 @@ export function useFeedPosts() {
       lastPage.hasMore ? allPages.length * PAGE_SIZE : undefined,
   });
 
-  const posts = enrichWithAstrologers(
-    query.data?.pages.flatMap((page) => page.posts) ?? [],
+  // useMemo: warna har render pe naye objects bante hain aur memo cards re-render hote hain
+  const posts = useMemo(
+    () => enrichWithAstrologers(query.data?.pages.flatMap((page) => page.posts) ?? []),
+    [query.data],
   );
 
   // Feed screen mount pe isse call karta hai — initial fetch useInfiniteQuery
