@@ -15,6 +15,9 @@
       }
     },
     "android": {
+      "blockedPermissions": [
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#6B21A8",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
