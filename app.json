@@ -27,6 +27,9 @@
       "predictiveBackGestureEnabled": false,
       "package": "com.astrobook.app",
       "googleServicesFile": "./google-services.json",
+      "blockedPermissions": [
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION"
+      ],
       "permissions": [
         "CAMERA",
         "RECORD_AUDIO",
