@@ -23,6 +23,19 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+type TimeFilter = "today" | "month" | "year" | "all";
+
+const TIME_FILTERS: { key: TimeFilter; label: string }[] = [
+  { key: "today", label: "Today" },
+  { key: "month", label: "This Month" },
+  { key: "year", label: "This Year" },
+  { key: "all", label: "All" },
+];
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
 function formatDateTime(iso: string) {
   const d = new Date(iso);
   const date = d.toLocaleDateString("en-IN", {
@@ -39,47 +52,41 @@ function formatDateTime(iso: string) {
   return { date, time };
 }
 
+function matchesTimeFilter(iso: string, filter: TimeFilter): boolean {
+  if (filter === "all") return true;
+  const d = new Date(iso);
+  const now = new Date();
+  if (filter === "today") {
+    return (
+      d.getFullYear() === now.getFullYear() &&
+      d.getMonth() === now.getMonth() &&
+      d.getDate() === now.getDate()
+    );
+  }
+  if (filter === "month") {
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+  }
+  if (filter === "year") {
+    return d.getFullYear() === now.getFullYear();
+  }
+  return true;
+}
+
+// ─── Status badge config ─────────────────────────────────────────────────────
+
 const STATUS_STYLES: Record<
   string,
   { bg: string; border: string; text: string; label: string }
 > = {
-  pending: {
-    bg: "#FFFBEB",
-    border: "#FDE68A",
-    text: "#B45309",
-    label: "Pending",
-  },
-  confirmed: {
-    bg: "#F0FDF4",
-    border: "#BBF7D0",
-    text: "#15803D",
-    label: "Confirmed",
-  },
-  ongoing: {
-    bg: "#EFF6FF",
-    border: "#BFDBFE",
-    text: "#1D4ED8",
-    label: "Ongoing",
-  },
-  completed: {
-    bg: "#F3F4F6",
-    border: "#E5E7EB",
-    text: "#4B5563",
-    label: "Completed",
-  },
-  cancelled: {
-    bg: "#FEF2F2",
-    border: "#FECACA",
-    text: "#DC2626",
-    label: "Cancelled",
-  },
-  missed: {
-    bg: "#FEF2F2",
-    border: "#FECACA",
-    text: "#DC2626",
-    label: "Missed — Refunded",
-  },
+  pending: { bg: "#FFFBEB", border: "#FDE68A", text: "#B45309", label: "Pending" },
+  confirmed: { bg: "#F0FDF4", border: "#BBF7D0", text: "#15803D", label: "Confirmed" },
+  ongoing: { bg: "#EFF6FF", border: "#BFDBFE", text: "#1D4ED8", label: "Ongoing" },
+  completed: { bg: "#F3F4F6", border: "#E5E7EB", text: "#4B5563", label: "Completed" },
+  cancelled: { bg: "#FEF2F2", border: "#FECACA", text: "#DC2626", label: "Cancelled" },
+  missed: { bg: "#FEF2F2", border: "#FECACA", text: "#DC2626", label: "Missed — Refunded" },
 };
+
+// ─── BookingCard ─────────────────────────────────────────────────────────────
 
 function BookingCard({
   item,
@@ -100,11 +107,8 @@ function BookingCard({
   const statusStyle = STATUS_STYLES[item.status] ?? STATUS_STYLES.pending!;
   const canCancel = item.status === "pending" || item.status === "confirmed";
   const canJoin = item.status === "confirmed" || item.status === "ongoing";
-  // Astrologer isi shared screen se apni sessions bhi dekhta hai — usse
-  // apna khud ka naam nahi, CLIENT ka naam dikhna chahiye
   const isViewerAstrologer = user?.id === item.astrologerId;
   const otherPartyName = isViewerAstrologer ? item.userName : item.astrologerName;
-  // Rating sirf client apni complete hui session pe de sakta hai
   const canRate = item.status === "completed" && !isViewerAstrologer;
 
   return (
@@ -239,6 +243,9 @@ function BookingCard({
   );
 }
 
+// ─── SectionBlock ─────────────────────────────────────────────────────────────
+// Hamesha render hota hai — empty ho to ek chhoti empty state dikhata hai
+
 function SectionBlock({
   title,
   items,
@@ -262,9 +269,7 @@ function SectionBlock({
 
       {items.length === 0 ? (
         <View style={styles.emptyBox}>
-          <Text style={styles.emptyText}>
-            No {title.toLowerCase()} bookings
-          </Text>
+          <Text style={styles.emptyText}>No {title.toLowerCase()} bookings</Text>
         </View>
       ) : (
         items.map((item) => (
@@ -282,15 +287,21 @@ function SectionBlock({
   );
 }
 
+// ─── Main tab config ──────────────────────────────────────────────────────────
+
 const TABS = [
   { key: "consultations", label: "Consultations", enabled: true },
   { key: "courses", label: "Courses", enabled: false },
   { key: "products", label: "Products", enabled: false },
 ];
 
+// ─── Screen ───────────────────────────────────────────────────────────────────
+
 export default function MyBookingsScreen() {
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState("consultations");
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>("all");
+
   const { appointments, loading, refreshing, fetchAppointments } =
     useMyAppointments();
   const [cancellingId, setCancellingId] = useState<string | null>(null);
@@ -326,8 +337,7 @@ export default function MyBookingsScreen() {
               toast.show("Booking cancel ho gayi", "success");
             } catch (err: any) {
               toast.show(
-                err?.response?.data?.message ||
-                  "Booking cancel nahi ho payi",
+                err?.response?.data?.message || "Booking cancel nahi ho payi",
                 "error",
               );
             } finally {
@@ -339,10 +349,14 @@ export default function MyBookingsScreen() {
     );
   };
 
-  // "ongoing" ko "Upcoming" section ke saath hi dikha rahe hain (upar) —
-  // is UI mein alag se "Ongoing" tab/section nahi tha, aur ongoing bhi
-  // effectively ek "abhi hone wali / ho rahi" booking hi hai
+  // Filter appointments by time — teeno sections ke liye alag alag
+  const filterFn = (item: AppointmentDetailed) =>
+    matchesTimeFilter(item.scheduledAt, timeFilter);
+
   const upcomingCombined = [...appointments.ongoing, ...appointments.upcoming];
+  const filteredUpcoming = upcomingCombined.filter(filterFn);
+  const filteredCompleted = appointments.completed.filter(filterFn);
+  const filteredCancelled = appointments.cancelled.filter(filterFn);
 
   return (
     <View style={styles.root}>
@@ -355,7 +369,10 @@ export default function MyBookingsScreen() {
       ) : (
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={[styles.content, { paddingBottom: 32 + insets.bottom }]}
+          contentContainerStyle={[
+            styles.content,
+            { paddingBottom: 32 + insets.bottom },
+          ]}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -366,12 +383,10 @@ export default function MyBookingsScreen() {
         >
           {/* Page Title */}
           <View style={styles.pageTitleRow}>
-            <View style={styles.pageTitleBadge}>
-              <Text style={styles.pageTitleText}>My bookings</Text>
-            </View>
+            <Text style={styles.pageTitleText}>My bookings</Text>
           </View>
 
-          {/* Tabs */}
+          {/* Type tabs */}
           <View style={styles.tabRow}>
             {TABS.map((tab) => (
               <TouchableOpacity
@@ -398,12 +413,36 @@ export default function MyBookingsScreen() {
             ))}
           </View>
 
-          {/* Content */}
           {activeTab === "consultations" && (
-            <View>
+            <>
+              {/* Time filter chips */}
+              <View style={styles.filterRow}>
+                {TIME_FILTERS.map((f) => {
+                  const active = timeFilter === f.key;
+                  return (
+                    <TouchableOpacity
+                      key={f.key}
+                      style={[styles.filterChip, active && styles.filterChipActive]}
+                      onPress={() => setTimeFilter(f.key)}
+                      activeOpacity={0.75}
+                    >
+                      <Text
+                        style={[
+                          styles.filterChipText,
+                          active && styles.filterChipTextActive,
+                        ]}
+                      >
+                        {f.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* 3 sections — hamesha dikhte hain */}
               <SectionBlock
                 title="Upcoming"
-                items={upcomingCombined}
+                items={filteredUpcoming}
                 onCancel={handleCancel}
                 cancellingId={cancellingId}
                 reviews={myReviews}
@@ -411,7 +450,7 @@ export default function MyBookingsScreen() {
               />
               <SectionBlock
                 title="Completed"
-                items={appointments.completed}
+                items={filteredCompleted}
                 onCancel={handleCancel}
                 cancellingId={cancellingId}
                 reviews={myReviews}
@@ -419,13 +458,13 @@ export default function MyBookingsScreen() {
               />
               <SectionBlock
                 title="Cancelled"
-                items={appointments.cancelled}
+                items={filteredCancelled}
                 onCancel={handleCancel}
                 cancellingId={cancellingId}
                 reviews={myReviews}
                 onRate={handleRate}
               />
-            </View>
+            </>
           )}
 
           <View style={{ height: 40 }} />
@@ -437,30 +476,23 @@ export default function MyBookingsScreen() {
   );
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#F9F5FF" },
   centerFill: { flex: 1, alignItems: "center", justifyContent: "center" },
   content: { paddingBottom: 32 },
 
   pageTitleRow: { paddingHorizontal: 16, paddingTop: 20, marginBottom: 16 },
-  pageTitleBadge: {
-    borderRadius: 8,
-    paddingVertical: 8,
-    alignSelf: "flex-start",
-  },
-  pageTitleText: {
-    color: "#1A1A2E",
-    fontSize: 28,
-    fontWeight: "900",
-  },
+  pageTitleText: { color: "#1A1A2E", fontSize: 28, fontWeight: "900" },
 
-  // Tabs
+  // Type tabs
   tabRow: {
     flexDirection: "row",
     borderBottomWidth: 1,
     borderBottomColor: "#E5E7EB",
     paddingHorizontal: 16,
-    marginBottom: 8,
+    marginBottom: 0,
   },
   tab: {
     flex: 1,
@@ -474,6 +506,29 @@ const styles = StyleSheet.create({
   tabText: { fontSize: 13, fontWeight: "600", color: "#6B7280" },
   tabTextActive: { color: "#9d0399" },
   tabTextDisabled: { color: "#9CA3AF" },
+
+  // Time filter chips
+  filterRow: {
+    flexDirection: "row",
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 4,
+    gap: 8,
+  },
+  filterChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: 1.5,
+    borderColor: "#EDE0F5",
+    backgroundColor: "#F9F5FF",
+  },
+  filterChipActive: {
+    backgroundColor: "#F3E8FF",
+    borderColor: "#9d0399",
+  },
+  filterChipText: { fontSize: 12, fontWeight: "600", color: "#6B7280" },
+  filterChipTextActive: { color: "#9d0399" },
 
   // Section
   section: { paddingHorizontal: 16, paddingTop: 20 },
@@ -495,7 +550,7 @@ const styles = StyleSheet.create({
   },
   emptyText: { fontSize: 13, color: "#9CA3AF" },
 
-  // Booking Card
+  // Booking card
   bookingCard: {
     backgroundColor: "#FFF",
     borderRadius: 14,
@@ -505,11 +560,7 @@ const styles = StyleSheet.create({
     elevation: 2,
     overflow: "hidden",
   },
-  cardInner: {
-    flexDirection: "row",
-    padding: 12,
-    gap: 12,
-  },
+  cardInner: { flexDirection: "row", padding: 12, gap: 12 },
   thumbnail: {
     width: 72,
     height: 72,
@@ -526,12 +577,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 2,
   },
-  cardTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#1A1A2E",
-    flex: 1,
-  },
+  cardTitle: { fontSize: 14, fontWeight: "700", color: "#1A1A2E", flex: 1 },
   cardAstro: { fontSize: 12, color: "#6B7280", marginBottom: 4 },
   statusBadge: {
     borderRadius: 4,
@@ -542,12 +588,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   statusBadgeText: { fontSize: 10, fontWeight: "700" },
-  cardMeta: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    marginBottom: 2,
-  },
+  cardMeta: { flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 2 },
   cardMetaText: { fontSize: 11, color: "#6B7280" },
 
   rateRow: {
@@ -596,9 +637,5 @@ const styles = StyleSheet.create({
   },
   joinSessionBtnText: { fontSize: 12, color: "#FFF", fontWeight: "700" },
   cancelBtn: { paddingVertical: 2, paddingHorizontal: 4 },
-  cancelBtnText: {
-    fontSize: 12,
-    color: "#DC2626",
-    fontWeight: "700",
-  },
+  cancelBtnText: { fontSize: 12, color: "#DC2626", fontWeight: "700" },
 });

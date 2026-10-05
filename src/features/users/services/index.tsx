@@ -12,6 +12,8 @@ export type UserProfile = {
   isAstrologer: boolean;
   avatarUrl: string | null;
   bio: string | null;
+  // true => Google se login (email Google ne verify kiya, edit nahi hota)
+  hasGoogle?: boolean;
   createdAt: string;
   updatedAt: string;
   // Razorpay Route fields — commented out during the Cashfree migration,
@@ -31,6 +33,7 @@ export type UserProfile = {
 
 export type UpdateProfilePayload = {
   name?: string;
+  email?: string;
   dateOfBirth?: string; // YYYY-MM-DD
   interests?: string[];
   avatarUrl?: string;

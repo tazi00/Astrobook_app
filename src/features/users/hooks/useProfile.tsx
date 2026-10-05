@@ -1,8 +1,10 @@
 import { queryKeys } from "@/lib/queryClient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert } from "react-native";
-import type { UpdateProfilePayload, UserProfile } from "../services";
+import type { UserProfile } from "../services";
 import { usersService } from "../services";
+
+type UpdateProfilePayload = Parameters<typeof usersService.updateProfile>[0];
 
 // ─── useMyProfile ────────────────────────────────────────────────────────────
 // React Query se — yeh cache poore app mein SHARED hai. Jahan bhi
