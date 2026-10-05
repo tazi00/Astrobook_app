@@ -1,9 +1,8 @@
 import Header from "@/components/header";
 import UserAvatar from "@/components/UserAvatar";
-import { useAstrologerProfile } from "@/features/astrologer/hooks/useAstrologerProfile";
-import { useUser } from "@/features/auth/store/auth.store";
-import FavoriteButton from "@/features/favorites/components/FavoriteButton";
+import { AstroColors } from "@/constants/astro-theme";
 import ProfileAbout from "@/features/astrologer/components/ProfileAbout";
+import { useAstrologerProfile } from "@/features/astrologer/hooks/useAstrologerProfile";
 import {
   experienceLabel,
   formatCount,
@@ -11,13 +10,13 @@ import {
   formatPrice,
   formatRating,
 } from "@/features/astrologer/utils/cardFormat";
+import { useUser } from "@/features/auth/store/auth.store";
+import FavoriteButton from "@/features/favorites/components/FavoriteButton";
+import { useFollowCounts, useFollowStatus } from "@/features/follows/hooks/useFollow";
 import ProfilePostTile from "@/features/posts/components/ProfilePostTile";
-import { AstroColors } from "@/constants/astro-theme";
-import { Ionicons } from "@expo/vector-icons";
-import AstrologerReviewsSection from "@/features/reviews/components/AstrologerReviewsSection";
-import { useFollowStatus, useFollowCounts } from "@/features/follows/hooks/useFollow";
 import { useAstrologerPosts } from "@/features/posts/hooks/useFeed";
-import { Feather } from "@expo/vector-icons";
+import AstrologerReviewsSection from "@/features/reviews/components/AstrologerReviewsSection";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -176,7 +175,7 @@ export default function AstrologerProfileScreen() {
                   uri={astrologer.avatarUrl}
                   name={astrologer.name}
                   id={astrologer.id}
-                  size={144}
+                  size={100}
                 />
               </View>
               {!isOwnProfile && (
@@ -513,9 +512,9 @@ const styles = StyleSheet.create({
   topRow: { flexDirection: "row", alignItems: "flex-start", gap: 16 },
   profileSidebar: { alignItems: "center", gap: 10, flexShrink: 0 },
   avatarContainer: {
-    width: 150,
-    height: 150,
-    borderRadius: 100,
+    width: 108,
+    height: 108,
+    borderRadius: 54,
     borderWidth: 3,
     borderColor: "#d8b4fe",
     backgroundColor: "#fdf2ff",
