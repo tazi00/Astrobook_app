@@ -173,6 +173,15 @@ export function classifyPaymentFailure(
     ) {
       return "server";
     }
+    // "Error in opening checkout" — checkout modal khula hi nahi, ye bank side
+    // nahi hai. Ye tab hota hai jab order test key se bana ho par app live key
+    // use kar raha ho (ya vice versa). Humari taraf ki dikkat hai.
+    if (
+      r.code === "BAD_REQUEST_ERROR" &&
+      (text.includes("opening checkout") || text.includes("open checkout"))
+    ) {
+      return "server";
+    }
     // BAD_REQUEST_ERROR / payment_failed / authentication step = bank side
     return "declined";
   }
