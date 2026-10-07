@@ -10,10 +10,14 @@ import {
   ActivityIndicator,
   Alert,
   BackHandler,
+  FlatList,
+  Keyboard,
+  KeyboardAvoidingView,
   PermissionsAndroid,
   Platform,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -41,6 +45,14 @@ type ScreenState =
   | "in_call"
   | "ended"
   | "error";
+
+type ChatMsg = {
+  id: string;
+  text: string;
+  isMine: boolean;
+  senderName: string;
+  timestamp: number;
+};
 
 function formatCountdown(ms: number) {
   if (ms <= 0) return "0:00";
@@ -71,10 +83,20 @@ export default function SessionScreen() {
   const [cameraOff, setCameraOff] = useState(false);
   const [remainingMs, setRemainingMs] = useState(0);
 
+  // ── In-call chat ────────────────────────────────────────────────────────────
+  const [chatOpen, setChatOpen] = useState(false);
+  const [messages, setMessages] = useState<ChatMsg[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [unreadCount, setUnreadCount] = useState(0);
+
   const engineRef = useRef<IRtcEngine | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const endsAtRef = useRef<number>(0);
   const endingRef = useRef(false); // double-tap/duplicate-end guard
+  const dataStreamIdRef = useRef<number | null>(null);
+  const msgListRef = useRef<FlatList<ChatMsg>>(null);
+  // Ref so the Agora event handler (closed over once) always sees current chatOpen
+  const chatOpenRef = useRef(false);
 
   const isAstrologer = appointment ? user?.id === appointment.astrologerId : false;
   const otherPersonLabel = isAstrologer ? "Client" : "Astrologer";
@@ -83,6 +105,19 @@ export default function SessionScreen() {
       ? appointment.userName ?? "Client"
       : appointment.astrologerName ?? "Astrologer"
     : "";
+
+  // Keep chatOpenRef in sync; clear badge when panel opens
+  useEffect(() => {
+    chatOpenRef.current = chatOpen;
+    if (chatOpen) setUnreadCount(0);
+  }, [chatOpen]);
+
+  // Auto-scroll FlatList to latest message when panel is visible
+  useEffect(() => {
+    if (messages.length > 0 && chatOpen) {
+      setTimeout(() => msgListRef.current?.scrollToEnd({ animated: true }), 80);
+    }
+  }, [messages, chatOpen]);
 
   // ── Load appointment + countdown-before-join ticker ──────────────────────
   const loadAppointment = useCallback(async () => {
@@ -217,6 +252,7 @@ export default function SessionScreen() {
       // ignore — best-effort cleanup
     }
     engineRef.current = null;
+    dataStreamIdRef.current = null;
     setRemoteUid(null);
     setRemoteAudioMuted(false);
     setRemoteVideoMuted(false);
@@ -235,6 +271,11 @@ export default function SessionScreen() {
   useEffect(() => {
     if (screenState !== "in_call" || Platform.OS !== "android") return;
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      // Agar chat panel khula hai toh pehle woh band karo
+      if (chatOpenRef.current) {
+        setChatOpen(false);
+        return true;
+      }
       Alert.alert(
         "Session Chhodna Hai?",
         "Agar tum ab call se bahar gaye toh session end nahi hoga, lekin video/audio ruk jaayega. Dobara isi booking se join kar sakte ho.",
@@ -333,6 +374,27 @@ export default function SessionScreen() {
         onError: (err) => {
           console.log("Agora error:", err);
         },
+        // Doosri party se data stream message aaya — in-call chat ke liye
+        onStreamMessage: (_connection, _uid, _streamId, data) => {
+          try {
+            const text = new TextDecoder().decode(data as Uint8Array);
+            const msg = JSON.parse(text) as { text: string; name: string; ts: number };
+            const incoming: ChatMsg = {
+              id: `remote-${msg.ts}-${Math.random()}`,
+              text: msg.text,
+              isMine: false,
+              senderName: msg.name || otherPersonName,
+              timestamp: msg.ts,
+            };
+            setMessages((prev) => [...prev, incoming]);
+            // Panel band hai toh badge badhao
+            if (!chatOpenRef.current) {
+              setUnreadCount((prev) => prev + 1);
+            }
+          } catch {
+            // corrupt/non-chat data stream — ignore
+          }
+        },
         // Token ~30s mein expire hone wala hai — naya token backend se le
         // ke engine.renewToken() se de do, call disconnect nahi hoti. Ye
         // khaas taur pe 60-min se lambe services (90-min variant) ke liye
@@ -350,6 +412,17 @@ export default function SessionScreen() {
       engine.joinChannel(agora.token, agora.channel, 0, {
         clientRoleType: ClientRoleType.ClientRoleBroadcaster,
       });
+
+      // Data stream setup — in-call chat ke liye. createDataStream positive
+      // number (streamId) return karta hai success pe; negative = error.
+      try {
+        const dsId = engine.createDataStream({ syncWithAudio: false, ordered: true } as any);
+        dataStreamIdRef.current = typeof dsId === "number" && dsId > 0 ? dsId : null;
+      } catch (err) {
+        // Data stream optional hai — fail hone pe bhi call chalta rehta hai
+        console.log("createDataStream failed:", err);
+        dataStreamIdRef.current = null;
+      }
 
       engineRef.current = engine;
       setScreenState("in_call");
@@ -458,6 +531,44 @@ export default function SessionScreen() {
     const next = !cameraOff;
     engineRef.current?.muteLocalVideoStream(next);
     setCameraOff(next);
+  };
+
+  const flipCamera = () => {
+    engineRef.current?.switchCamera();
+  };
+
+  // In-call chat — data stream se message bhejo
+  const sendChatMessage = () => {
+    const text = chatInput.trim();
+    if (!text || !engineRef.current || dataStreamIdRef.current === null) return;
+    try {
+      const payload = JSON.stringify({
+        text,
+        name: user?.name ?? "Me",
+        ts: Date.now(),
+      });
+      const bytes = new TextEncoder().encode(payload);
+      engineRef.current.sendStreamMessage(
+        dataStreamIdRef.current,
+        bytes as any,
+        bytes.length,
+      );
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `me-${Date.now()}`,
+          text,
+          isMine: true,
+          senderName: "Me",
+          timestamp: Date.now(),
+        },
+      ]);
+      setChatInput("");
+      Keyboard.dismiss();
+    } catch (err) {
+      console.log("sendStreamMessage error:", err);
+      Alert.alert("Message nahi gaya", "Dobara try karo.");
+    }
   };
 
   // ── Render states ──────────────────────────────────────────────────────────
@@ -603,6 +714,10 @@ export default function SessionScreen() {
       {!cameraOff && (
         <View style={styles.localVideoBox}>
           <RtcSurfaceView style={{ flex: 1 }} canvas={{ uid: 0 }} zOrderMediaOverlay />
+          {/* Camera flip button — local preview ke andar hi dikhta hai */}
+          <TouchableOpacity style={styles.flipBtn} onPress={flipCamera}>
+            <Feather name="refresh-cw" size={14} color="#FFF" />
+          </TouchableOpacity>
         </View>
       )}
 
@@ -616,6 +731,23 @@ export default function SessionScreen() {
 
       {/* Bottom controls */}
       <View style={styles.controlsBar}>
+        {/* Chat button with unread badge */}
+        <View>
+          <TouchableOpacity
+            style={[styles.controlBtn, chatOpen && styles.controlBtnActive]}
+            onPress={() => setChatOpen((v) => !v)}
+          >
+            <Feather name="message-circle" size={22} color="#FFF" />
+          </TouchableOpacity>
+          {unreadCount > 0 && (
+            <View style={styles.unreadBadge}>
+              <Text style={styles.unreadBadgeText}>
+                {unreadCount > 9 ? "9+" : String(unreadCount)}
+              </Text>
+            </View>
+          )}
+        </View>
+
         <TouchableOpacity
           style={[styles.controlBtn, micMuted && styles.controlBtnActive]}
           onPress={toggleMic}
@@ -634,6 +766,104 @@ export default function SessionScreen() {
           <Feather name={cameraOff ? "video-off" : "video"} size={22} color="#FFF" />
         </TouchableOpacity>
       </View>
+
+      {/* ── In-call chat drawer ──────────────────────────────────────────── */}
+      {chatOpen && (
+        <View style={styles.chatOverlay}>
+          {/* Backdrop — tap bahar to close */}
+          <TouchableOpacity
+            style={styles.chatBackdrop}
+            activeOpacity={1}
+            onPress={() => {
+              setChatOpen(false);
+              Keyboard.dismiss();
+            }}
+          />
+
+          {/* Chat panel */}
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            keyboardVerticalOffset={0}
+          >
+            <View style={styles.chatPanel}>
+              {/* Header */}
+              <View style={styles.chatHeader}>
+                <Text style={styles.chatHeaderTitle}>Chat</Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    setChatOpen(false);
+                    Keyboard.dismiss();
+                  }}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Feather name="x" size={20} color="#374151" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Message list */}
+              <FlatList
+                ref={msgListRef}
+                data={messages}
+                keyExtractor={(item) => item.id}
+                style={styles.msgList}
+                contentContainerStyle={styles.msgListContent}
+                keyboardShouldPersistTaps="handled"
+                renderItem={({ item }) => (
+                  <View
+                    style={[
+                      styles.msgBubble,
+                      item.isMine ? styles.msgBubbleMine : styles.msgBubbleOther,
+                    ]}
+                  >
+                    {!item.isMine && (
+                      <Text style={styles.msgSender}>{item.senderName}</Text>
+                    )}
+                    <Text
+                      style={[
+                        styles.msgText,
+                        item.isMine && styles.msgTextMine,
+                      ]}
+                    >
+                      {item.text}
+                    </Text>
+                  </View>
+                )}
+                ListEmptyComponent={
+                  <Text style={styles.chatEmpty}>
+                    Abhi koi message nahi — pehla message bhejo!
+                  </Text>
+                }
+              />
+
+              {/* Input row */}
+              <View style={styles.chatInputRow}>
+                <TextInput
+                  style={styles.chatInput}
+                  value={chatInput}
+                  onChangeText={setChatInput}
+                  placeholder="Message..."
+                  placeholderTextColor="#9CA3AF"
+                  multiline
+                  maxLength={500}
+                  returnKeyType="send"
+                  blurOnSubmit={false}
+                  onSubmitEditing={sendChatMessage}
+                />
+                <TouchableOpacity
+                  style={[
+                    styles.sendBtn,
+                    !chatInput.trim() && styles.sendBtnDisabled,
+                  ]}
+                  onPress={sendChatMessage}
+                  disabled={!chatInput.trim()}
+                >
+                  <Feather name="send" size={18} color="#FFF" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      )}
     </View>
   );
 }
@@ -700,7 +930,7 @@ const styles = StyleSheet.create({
   joinBtnDisabled: { backgroundColor: "#D1D5DB" },
   joinBtnText: { color: "#FFF", fontWeight: "800", fontSize: 15 },
 
-  // In-call
+  // ── In-call ────────────────────────────────────────────────────────────────
   callRoot: { flex: 1, backgroundColor: "#000" },
   remoteVideo: { flex: 1 },
   waitingBox: { alignItems: "center", justifyContent: "center", gap: 10 },
@@ -739,6 +969,17 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: "#FFF3",
   },
+  flipBtn: {
+    position: "absolute",
+    bottom: 6,
+    right: 6,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#00000060",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   topBar: {
     position: "absolute",
     top: 50,
@@ -762,7 +1003,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    gap: 24,
+    gap: 20,
   },
   controlBtn: {
     width: 54,
@@ -781,4 +1022,124 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  // Chat button unread badge
+  unreadBadge: {
+    position: "absolute",
+    top: -3,
+    right: -3,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: "#EF4444",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 3,
+  },
+  unreadBadgeText: { color: "#FFF", fontSize: 10, fontWeight: "700" },
+
+  // ── Chat overlay + panel ────────────────────────────────────────────────────
+  chatOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: "flex-end",
+  },
+  chatBackdrop: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "#00000050",
+  },
+  chatPanel: {
+    backgroundColor: "#FFF",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    height: 380,
+    overflow: "hidden",
+  },
+  chatHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#E5E7EB",
+  },
+  chatHeaderTitle: { fontSize: 16, fontWeight: "700", color: "#111827" },
+  msgList: { flex: 1 },
+  msgListContent: {
+    padding: 12,
+    gap: 8,
+    flexGrow: 1,
+  },
+  msgBubble: {
+    maxWidth: "78%",
+    backgroundColor: "#F3F4F6",
+    borderRadius: 14,
+    borderBottomLeftRadius: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    alignSelf: "flex-start",
+  },
+  msgBubbleOther: {
+    alignSelf: "flex-start",
+  },
+  msgBubbleMine: {
+    backgroundColor: "#9d0399",
+    borderRadius: 14,
+    borderBottomRightRadius: 4,
+    borderBottomLeftRadius: 14,
+    alignSelf: "flex-end",
+  },
+  msgSender: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#6B7280",
+    marginBottom: 3,
+  },
+  msgText: { fontSize: 14, color: "#1F2937", lineHeight: 20 },
+  msgTextMine: { color: "#FFF" },
+  chatEmpty: {
+    textAlign: "center",
+    color: "#9CA3AF",
+    fontSize: 13,
+    padding: 32,
+    flex: 1,
+  },
+  chatInputRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "#E5E7EB",
+  },
+  chatInput: {
+    flex: 1,
+    backgroundColor: "#F9FAFB",
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    paddingHorizontal: 14,
+    paddingTop: 9,
+    paddingBottom: 9,
+    fontSize: 14,
+    color: "#1F2937",
+    maxHeight: 96,
+  },
+  sendBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#9d0399",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sendBtnDisabled: { opacity: 0.4 },
 });
