@@ -1,0 +1,36 @@
+import { apiClient } from '@/services/apiClient'
+import type {
+  ClaimAction,
+  CancellationRequest,
+  WalletBalance,
+  WalletTransaction,
+} from '../types'
+
+class WalletServiceApi {
+  private readonly base = '/wallet'
+
+  async getBalance(): Promise<WalletBalance> {
+    const res = await apiClient.get<WalletBalance>(`${this.base}/balance`)
+    return res.data
+  }
+
+  async getTransactions(): Promise<WalletTransaction[]> {
+    const res = await apiClient.get<{ transactions: WalletTransaction[] }>(
+      `${this.base}/transactions`,
+    )
+    return res.data.transactions
+  }
+
+  async getPendingCancellations(): Promise<CancellationRequest[]> {
+    const res = await apiClient.get<{ requests: CancellationRequest[] }>(
+      `${this.base}/cancellation-requests/pending`,
+    )
+    return res.data.requests
+  }
+
+  async claimCancellation(requestId: string, action: ClaimAction): Promise<void> {
+    await apiClient.post(`${this.base}/cancellation-requests/${requestId}/claim`, { action })
+  }
+}
+
+export const walletService = new WalletServiceApi()

@@ -9,6 +9,7 @@ const SUPPORT: ProfileMenuItem[] = [
 // Notifications yahan nahi — header ke bell se khulta hai.
 export const USER_MENU: ProfileMenuItem[] = [
   { icon: "calendar", label: "My Bookings", route: "/(user)/my-bookings" },
+  { icon: "zap", label: "My Wallet", route: "/(user)/wallet" },
   ...SUPPORT,
 ];
 
