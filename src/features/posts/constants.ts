@@ -13,7 +13,28 @@ export const TEXT_COLORS = ["#FFFFFF", "#F5F5F5", "#FDE68A", "#FBCFE8", "#BFDBFE
 export const STICKER_BG_COLORS = ["#00000090", "#9d0399", "#FFFFFF", "#065F46"];
 export const STICKER_TEXT_COLORS = ["#FFFFFF", "#1A1A2E", "#FDE68A"];
 
-export const MAX_VIDEO_DURATION_SEC = 120; // reel jaisa — 2 minute
-export const MAX_VIDEO_SIZE_MB = 60; // ImageKit storage ke hisaab se realistic cap
+// ── Sticker packs — emoji / text stickers jo image pe lagaye ja sakte hain ──
+export const STICKER_PACKS: { label: string; stickers: string[] }[] = [
+  {
+    label: "🪐 Astro",
+    stickers: ["♈", "♉", "♊", "♋", "♌", "♍", "♎", "♏", "♐", "♑", "♒", "♓", "🔮", "🌙", "⭐", "🌟", "✨", "💫", "🪐", "☀️"],
+  },
+  {
+    label: "🙏 Bhakti",
+    stickers: ["🙏", "🕉️", "☸️", "🪔", "🌺", "🌸", "🌼", "🔱", "📿", "🛕", "🪷", "🌹", "✡️", "☪️", "✝️", "🕯️", "🌿", "🍃", "🎐", "🎋"],
+  },
+  {
+    label: "😊 Vibe",
+    stickers: ["😊", "🥰", "😍", "🤩", "😌", "🧘", "💆", "🌈", "🦋", "❤️", "💜", "💛", "💙", "🌻", "🌊", "🔥", "⚡", "💎", "🌺", "🎯"],
+  },
+  {
+    label: "💬 Text",
+    stickers: ["Jai Shree Ram", "Jai Mata Di", "Om Namah Shivay", "Jai Hanuman", "Radhe Radhe", "Blessings ✨", "Good Vibes 🌟", "Stay Blessed 🙏", "Divine Energy 🔮", "Cosmic Love 💫"],
+  },
+];
+
+export const MAX_VIDEO_DURATION_SEC = 300; // 5 minute max
+export const MAX_VIDEO_SIZE_MB = 100;      // compressed 720p ke baad bhi 100MB safe limit hai
 export const MAX_CONTENT = 2000;
-export const MAX_TAGS = 3;
+export const MAX_TAGS = 3;         // prebuilt category chips
+export const MAX_CUSTOM_TAGS = 3;  // user ke apne free-text tags

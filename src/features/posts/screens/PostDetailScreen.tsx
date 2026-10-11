@@ -22,9 +22,11 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import CommentsSheet from "../components/CommentsSheet";
+import FullscreenMediaViewer from "../components/FullscreenMediaViewer";
 import PostActionsBar from "../components/PostActionsBar";
 import PostHero from "../components/PostHero";
 import RelatedPosts from "../components/RelatedPosts";
+import RichCaption from "../components/RichCaption";
 import {
   usePostCache,
   usePostDetail,
@@ -49,6 +51,7 @@ export default function PostDetailScreen() {
 
   const [sheetOpen, setSheetOpen] = useState(false);
   const [focusInput, setFocusInput] = useState(false);
+  const [fullscreenOpen, setFullscreenOpen] = useState(false);
 
   const openComments = (focus: boolean) => {
     setFocusInput(focus);
@@ -71,9 +74,15 @@ export default function PostDetailScreen() {
   };
 
   const share = async (p: Post) => {
+    // https:// URL is used so that:
+    //   • WhatsApp / Facebook generate a preview card (OG meta from /share/post/:id)
+    //   • Android App Links intercept the URL and open the app directly (if installed)
+    //   • If app is NOT installed, /share/post/:id page redirects to Play Store
+    const shareUrl = `https://astrobook.in/share/post/${p.id}`;
     try {
       await Share.share({
-        message: `${p.astrologerName ?? "Astrobook"} ka post dekho: astrobook://post/${p.id}`,
+        message: `${p.astrologerName ?? "Astrobook"} ka post dekho Astrobook pe! ${shareUrl}`,
+        url: shareUrl, // iOS Share Sheet uses this field (future-proofing)
       });
     } catch {
       // cancelled
@@ -159,10 +168,20 @@ export default function PostDetailScreen() {
           </View>
         </TouchableOpacity>
 
-        <PostHero post={post} width={heroW} />
+        <PostHero
+          post={post}
+          width={heroW}
+          playing={!fullscreenOpen}
+          showProgress
+          onMediaPress={
+            post.mediaType !== "TEXT" && post.mediaUrl
+              ? () => setFullscreenOpen(true)
+              : undefined
+          }
+        />
 
         {post.mediaType !== "TEXT" && post.content ? (
-          <Text style={styles.caption}>{post.content}</Text>
+          <RichCaption text={post.content} style={styles.caption} />
         ) : null}
 
         <PostActionsBar
@@ -216,6 +235,15 @@ export default function PostDetailScreen() {
         focusInput={focusInput}
         onClose={() => setSheetOpen(false)}
       />
+
+      {/* Fullscreen media viewer — image tap ya video expand icon se khulta hai */}
+      {fullscreenOpen ? (
+        <FullscreenMediaViewer
+          post={post}
+          visible={fullscreenOpen}
+          onClose={() => setFullscreenOpen(false)}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }

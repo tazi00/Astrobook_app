@@ -3,10 +3,35 @@ import { useAuthStore } from "@/features/auth/store/auth.store";
 import { usePushNotifications } from "@/features/notifications/hooks/usePushNotifications";
 import { queryClient } from "@/lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
+import * as Linking from "expo-linking";
 import { Slot, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+
+/**
+ * Ek post deep link URL se post ID nikalta hai.
+ * Supports both:
+ *   astrobook:///post/123           (custom URI scheme — direct in-app links)
+ *   https://astrobook.in/share/post/123  (Android App Links / share page)
+ *   https://astrobook.in/post/123       (future App Link path)
+ */
+function extractPostIdFromUrl(url: string): string | null {
+  try {
+    // Custom scheme: astrobook:///post/UUID
+    if (url.startsWith("astrobook://")) {
+      const match = url.match(/\/post\/([a-zA-Z0-9_-]+)/);
+      return match?.[1] ?? null;
+    }
+    // HTTPS share page: https://astrobook.in/share/post/UUID
+    //              or:  https://astrobook.in/post/UUID
+    const parsed = new URL(url);
+    const match = parsed.pathname.match(/\/(?:share\/)?post\/([a-zA-Z0-9_-]+)/);
+    return match?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
 
 export default function RootLayout() {
   return (
@@ -36,21 +61,38 @@ function AppGate() {
 
   useEffect(() => {
     const init = async () => {
+      // Deep link URL grab karo PEHLE — Linking.getInitialURL() sirf ek baar
+      // kaam karta hai; baad mein call karne pe null milta hai.
+      const initialUrl = await Linking.getInitialURL();
+
       const restored = await restoreSession();
       if (!restored) {
+        // Login nahi hai — pehle login karo. Login ke baad user feed pe
+        // land karega; deep link wahan se manually nahi handle hoga, lekin
+        // yeh edge case bahut rare hai (app cold-start from share link by
+        // unauthenticated user). Post detail publicly visible nahi hai, so
+        // login wall is the right behavior.
         router.replace("/(auth)/login" as any);
       } else {
-        // restoreSession() ne poora user object (isOnboarded samet) store
-        // mein save kar diya hai — session valid hone ka matlab yeh NAHI
-        // ki onboarding complete hai. Beech mein app band karne wale users
-        // ko yahan wapas onboarding pe bhejna hai, feed pe nahi — warna
-        // unka adhoora profile silently feed mein reh jaata (naam/DOB/
-        // interests kabhi save hi nahi hue the, kyunki onboarding sirf
-        // ek hi final submit call pe save karta hai).
         const freshUser = useAuthStore.getState().user;
         if (freshUser && !freshUser.isOnboarded) {
           router.replace("/(auth)/onboarding" as any);
+        } else if (initialUrl) {
+          // Deep link check — agar URL se post ID nikli toh directly wahan jao.
+          const postId = extractPostIdFromUrl(initialUrl);
+          if (postId) {
+            // replace() se feed history mein nahi jaati — back press karne pe
+            // user bahar hi jayega (correct behavior for cold-start deep link).
+            router.replace({
+              pathname: "/(user)/post/[id]" as any,
+              params: { id: postId },
+            });
+          } else {
+            // Koi aur deep link / unknown URL — feed pe bhejo.
+            router.replace("/(user)/feed" as any);
+          }
         } else {
+          // Normal cold start — feed.
           // User ho ya astrologer — dono hamesha feed pe hi land karte hain.
           // Astrologer apni profile se explicitly Dashboard pe navigate karta hai.
           router.replace("/(user)/feed" as any);

@@ -1,5 +1,5 @@
 import ScreenHeader from "@/components/ScreenHeader";
-import { useUser } from "@/features/auth/store/auth.store";
+import { AstroColors, AstroRadius, AstroShadow, AstroType, MIN_TOUCH } from "@/constants/astro-theme";
 import { useMyAppointments } from "@/features/consultation/hooks/useAppointments";
 import type { AppointmentDetailed } from "@/features/consultation/types";
 import { Feather } from "@expo/vector-icons";
@@ -17,40 +17,57 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const TABS = [
-  { key: "upcoming", label: "Upcoming" },
-  { key: "ongoing", label: "Ongoing" },
-  { key: "completed", label: "Completed" },
-  { key: "cancelled", label: "Cancelled" },
+  { key: "upcoming", label: "Upcoming", icon: "calendar" as const },
+  { key: "ongoing", label: "Live", icon: "radio" as const },
+  { key: "completed", label: "Completed", icon: "check-circle" as const },
+  { key: "cancelled", label: "Cancelled", icon: "x-circle" as const },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
 
-const STATUS_STYLES: Record<string, { bg: string; text: string }> = {
-  pending: { bg: "#FFFBEB", text: "#B45309" },
-  confirmed: { bg: "#F0FDF4", text: "#15803D" },
-  ongoing: { bg: "#EFF6FF", text: "#1D4ED8" },
-  completed: { bg: "#F3F4F6", text: "#4B5563" },
-  cancelled: { bg: "#FEF2F2", text: "#DC2626" },
-  missed: { bg: "#FEF2F2", text: "#DC2626" },
+const STATUS_META: Record<string, { bg: string; fg: string; label: string }> = {
+  pending:   { bg: "#FFFBEB", fg: "#B45309",              label: "Pending" },
+  confirmed: { bg: AstroColors.successTint, fg: AstroColors.successDark, label: "Confirmed" },
+  ongoing:   { bg: "#EFF6FF", fg: "#1D4ED8",              label: "Live" },
+  completed: { bg: "#F3F4F6", fg: "#4B5563",              label: "Done" },
+  cancelled: { bg: AstroColors.dangerTint, fg: AstroColors.danger, label: "Cancelled" },
 };
 
 function formatDateTime(iso: string) {
   const d = new Date(iso);
   return {
-    date: d.toLocaleDateString("en-IN", { day: "numeric", month: "short" }),
+    date: d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }),
     time: d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true }),
   };
+}
+
+function CancelledByChip({ cancelledBy }: { cancelledBy?: "user" | "astrologer" | null }) {
+  if (!cancelledBy) return null;
+  const byAstrologer = cancelledBy === "astrologer";
+  return (
+    <View style={[styles.chip, byAstrologer ? styles.chipAstrologer : styles.chipUser]}>
+      <Feather
+        name={byAstrologer ? "user-x" : "user"}
+        size={10}
+        color={byAstrologer ? AstroColors.danger : AstroColors.textSecondary}
+      />
+      <Text style={[styles.chipText, byAstrologer ? styles.chipTextAstrologer : styles.chipTextUser]}>
+        {byAstrologer ? "Astrologer ne cancel kiya" : "User ne cancel kiya"}
+      </Text>
+    </View>
+  );
 }
 
 function SessionCard({ item }: { item: AppointmentDetailed }) {
   const router = useRouter();
   const { date, time } = formatDateTime(item.scheduledAt);
-  const statusStyle = STATUS_STYLES[item.status] ?? STATUS_STYLES.pending!;
+  const meta = STATUS_META[item.status] ?? STATUS_META.pending!;
   const canJoin = item.status === "confirmed" || item.status === "ongoing";
+  const isCancelled = item.status === "cancelled";
 
   return (
     <TouchableOpacity
-      style={styles.card}
+      style={[styles.card, canJoin && styles.cardActive]}
       activeOpacity={0.85}
       onPress={() =>
         canJoin &&
@@ -60,11 +77,12 @@ function SessionCard({ item }: { item: AppointmentDetailed }) {
         })
       }
     >
+      {/* Top row */}
       <View style={styles.cardTop}>
-        <View style={styles.avatarCircle}>
-          <Feather name="user" size={18} color="#9d0399" />
+        <View style={styles.avatar}>
+          <Feather name="user" size={16} color={AstroColors.brand} />
         </View>
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, gap: 2 }}>
           <Text style={styles.clientName} numberOfLines={1}>
             {item.userName ?? "Client"}
           </Text>
@@ -72,32 +90,46 @@ function SessionCard({ item }: { item: AppointmentDetailed }) {
             {item.service.title}
           </Text>
         </View>
-        <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
-          <Text style={[styles.statusBadgeText, { color: statusStyle.text }]}>
-            {item.status}
-          </Text>
+        <View style={[styles.statusPill, { backgroundColor: meta.bg }]}>
+          <Text style={[styles.statusPillText, { color: meta.fg }]}>{meta.label}</Text>
         </View>
       </View>
 
-      <View style={styles.cardMetaRow}>
+      {/* Meta: date / time / duration */}
+      <View style={styles.metaRow}>
         <View style={styles.metaItem}>
-          <Feather name="calendar" size={12} color="#6B21A8" />
+          <Feather name="calendar" size={11} color={AstroColors.brand} />
           <Text style={styles.metaText}>{date}</Text>
         </View>
+        <View style={styles.metaDot} />
         <View style={styles.metaItem}>
-          <Feather name="clock" size={12} color="#6B21A8" />
+          <Feather name="clock" size={11} color={AstroColors.brand} />
           <Text style={styles.metaText}>{time}</Text>
         </View>
+        <View style={styles.metaDot} />
         <View style={styles.metaItem}>
-          <Feather name="hash" size={12} color="#6B21A8" />
+          <Feather name="activity" size={11} color={AstroColors.brand} />
           <Text style={styles.metaText}>{item.durationMinutes} min</Text>
         </View>
       </View>
 
+      {/* Price */}
+      {item.price && (
+        <View style={styles.priceRow}>
+          <Feather name="tag" size={11} color={AstroColors.gold} />
+          <Text style={styles.priceText}>₹{parseFloat(item.price).toFixed(0)}</Text>
+        </View>
+      )}
+
+      {/* cancelledBy chip */}
+      {isCancelled && <CancelledByChip cancelledBy={item.cancelledBy} />}
+
+      {/* Join CTA */}
       {canJoin && (
         <View style={styles.joinRow}>
           <Feather name="video" size={13} color="#FFF" />
-          <Text style={styles.joinText}>Join Session</Text>
+          <Text style={styles.joinText}>Session join karo</Text>
+          <Feather name="arrow-right" size={13} color="#FFF" />
         </View>
       )}
     </TouchableOpacity>
@@ -105,7 +137,6 @@ function SessionCard({ item }: { item: AppointmentDetailed }) {
 }
 
 export default function AstrologerSessionsScreen() {
-  const user = useUser();
   const { appointments, loading, refreshing, fetchAppointments } = useMyAppointments();
   const [activeTab, setActiveTab] = useState<TabKey>("upcoming");
 
@@ -117,47 +148,71 @@ export default function AstrologerSessionsScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
-      <ScreenHeader title="Sessions" subtitle="Apni bookings yahan manage karo" />
+      <ScreenHeader title="Sessions" subtitle="Apni saari bookings ek jagah" />
 
-      <View style={styles.tabRow}>
-        {TABS.map((tab) => (
-          <TouchableOpacity
-            key={tab.key}
-            style={[styles.tab, activeTab === tab.key && styles.tabActive]}
-            onPress={() => setActiveTab(tab.key)}
-          >
-            <Text style={[styles.tabText, activeTab === tab.key && styles.tabTextActive]}>
-              {tab.label} ({appointments[tab.key]?.length ?? 0})
-            </Text>
-          </TouchableOpacity>
-        ))}
+      {/* Tabs */}
+      <View style={styles.tabBar}>
+        {TABS.map((tab) => {
+          const count = appointments[tab.key]?.length ?? 0;
+          const isActive = activeTab === tab.key;
+          return (
+            <TouchableOpacity
+              key={tab.key}
+              style={[styles.tab, isActive && styles.tabActive]}
+              onPress={() => setActiveTab(tab.key)}
+              hitSlop={4}
+            >
+              <Feather
+                name={tab.icon}
+                size={13}
+                color={isActive ? AstroColors.onBrand : AstroColors.textSecondary}
+              />
+              <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
+                {tab.label}
+              </Text>
+              {count > 0 && (
+                <View style={[styles.countBadge, isActive && styles.countBadgeActive]}>
+                  <Text style={[styles.countText, isActive && styles.countTextActive]}>
+                    {count}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       {loading ? (
-        <View style={styles.centerFill}>
-          <ActivityIndicator color="#9d0399" size="large" />
+        <View style={styles.fill}>
+          <ActivityIndicator color={AstroColors.brand} size="large" />
         </View>
       ) : (
         <ScrollView
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
               onRefresh={() => fetchAppointments(true)}
-              tintColor="#9d0399"
+              tintColor={AstroColors.brand}
+              colors={[AstroColors.brand]}
             />
           }
         >
           {currentList.length === 0 ? (
-            <View style={styles.emptyBox}>
-              <Feather name="calendar" size={28} color="#D1D5DB" />
-              <Text style={styles.emptyText}>Is category mein koi booking nahi hai</Text>
+            <View style={styles.empty}>
+              <View style={styles.emptyIcon}>
+                <Feather name="inbox" size={22} color={AstroColors.brand} />
+              </View>
+              <Text style={styles.emptyTitle}>Kuch nahi mila</Text>
+              <Text style={styles.emptyText}>
+                Is tab mein abhi koi session nahi hai.
+              </Text>
             </View>
           ) : (
             currentList.map((item) => <SessionCard key={item.id} item={item} />)
           )}
-          <View style={{ height: 30 }} />
+          <View style={{ height: 32 }} />
         </ScrollView>
       )}
     </SafeAreaView>
@@ -165,72 +220,131 @@ export default function AstrologerSessionsScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#F9F5FF" },
-  centerFill: { flex: 1, alignItems: "center", justifyContent: "center" },
-  listContent: { padding: 16, gap: 12 },
+  root: { flex: 1, backgroundColor: AstroColors.canvas },
+  fill: { flex: 1, alignItems: "center", justifyContent: "center" },
+  list: { padding: 16, gap: 12 },
 
-  tabRow: {
+  // Tab bar
+  tabBar: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
+    gap: 6,
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: "#FFF",
+    paddingVertical: 10,
+    backgroundColor: AstroColors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: "#EDE9FF",
+    borderBottomColor: AstroColors.border,
   },
   tab: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 20,
-    backgroundColor: "#F5F0FF",
-  },
-  tabActive: { backgroundColor: "#9d0399" },
-  tabText: { fontSize: 12, fontWeight: "600", color: "#6B21A8" },
-  tabTextActive: { color: "#FFF" },
-
-  emptyBox: {
+    flex: 1,
+    flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 60,
-    gap: 10,
+    justifyContent: "center",
+    gap: 4,
+    minHeight: MIN_TOUCH - 4,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: AstroRadius.pill,
+    backgroundColor: AstroColors.brandTint,
   },
-  emptyText: { fontSize: 13, color: "#9CA3AF" },
+  tabActive: { backgroundColor: AstroColors.brand },
+  tabText: { ...AstroType.micro, color: AstroColors.textSecondary },
+  tabTextActive: { color: AstroColors.onBrand, fontWeight: "800" },
+  countBadge: {
+    backgroundColor: AstroColors.brandTintStrong,
+    borderRadius: AstroRadius.pill,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  countBadgeActive: { backgroundColor: "rgba(255,255,255,0.25)" },
+  countText: { fontSize: 10, fontWeight: "700", color: AstroColors.brand },
+  countTextActive: { color: AstroColors.onBrand },
 
+  // Card
   card: {
-    backgroundColor: "#FFF",
-    borderRadius: 14,
+    backgroundColor: AstroColors.surface,
+    borderRadius: AstroRadius.lg,
     padding: 14,
     borderWidth: 1,
-    borderColor: "#EDE9FF",
+    borderColor: AstroColors.border,
     gap: 10,
-    elevation: 2,
+    ...AstroShadow.soft,
   },
+  cardActive: {
+    borderColor: AstroColors.brand,
+    borderWidth: 1.5,
+  },
+
   cardTop: { flexDirection: "row", alignItems: "center", gap: 10 },
-  avatarCircle: {
+  avatar: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#F3E8FF",
+    backgroundColor: AstroColors.brandTint,
     alignItems: "center",
     justifyContent: "center",
   },
-  clientName: { fontSize: 14, fontWeight: "700", color: "#1A1A2E" },
-  serviceTitle: { fontSize: 12, color: "#6B7280", marginTop: 1 },
-  statusBadge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
-  statusBadgeText: { fontSize: 10, fontWeight: "700", textTransform: "capitalize" },
+  clientName: { ...AstroType.body, fontWeight: "700", color: AstroColors.ink },
+  serviceTitle: { ...AstroType.caption, color: AstroColors.textSecondary },
 
-  cardMetaRow: { flexDirection: "row", gap: 14 },
+  statusPill: { borderRadius: AstroRadius.pill, paddingHorizontal: 8, paddingVertical: 4 },
+  statusPillText: { ...AstroType.micro, fontWeight: "700", textTransform: "capitalize" },
+
+  metaRow: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
   metaItem: { flexDirection: "row", alignItems: "center", gap: 4 },
-  metaText: { fontSize: 11.5, color: "#4B5563", fontWeight: "500" },
+  metaText: { ...AstroType.micro, color: AstroColors.textSecondary },
+  metaDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: AstroColors.border,
+  },
 
+  priceRow: { flexDirection: "row", alignItems: "center", gap: 5 },
+  priceText: { ...AstroType.caption, fontWeight: "700", color: AstroColors.gold },
+
+  // cancelledBy chip
+  chip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    alignSelf: "flex-start",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: AstroRadius.pill,
+  },
+  chipAstrologer: { backgroundColor: AstroColors.dangerTint },
+  chipUser:       { backgroundColor: AstroColors.brandTint },
+  chipText:       { ...AstroType.micro, fontWeight: "700" },
+  chipTextAstrologer: { color: AstroColors.danger },
+  chipTextUser:       { color: AstroColors.brand },
+
+  // Join CTA
   joinRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    backgroundColor: "#9d0399",
-    borderRadius: 8,
-    paddingVertical: 8,
+    backgroundColor: AstroColors.brand,
+    borderRadius: AstroRadius.md,
+    paddingVertical: 10,
   },
-  joinText: { color: "#FFF", fontSize: 12, fontWeight: "700" },
+  joinText: { ...AstroType.button, color: AstroColors.onBrand },
+
+  // Empty
+  empty: {
+    alignItems: "center",
+    paddingVertical: 60,
+    gap: 8,
+  },
+  emptyIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: AstroColors.brandTint,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
+  emptyTitle: { ...AstroType.body, fontWeight: "700", color: AstroColors.ink },
+  emptyText: { ...AstroType.caption, color: AstroColors.textMuted, textAlign: "center" },
 });

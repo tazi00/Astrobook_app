@@ -12,6 +12,19 @@ export function timeAgo(iso: string): string {
 }
 
 export function formatPostDate(iso: string): string {
+  const diffMs   = Date.now() - new Date(iso).getTime();
+  const diffMins = Math.floor(diffMs / 60_000);
+
+  if (diffMins < 1)  return "just now";
+  if (diffMins < 60) return diffMins === 1 ? "1 min ago" : `${diffMins} mins ago`;
+
+  const hrs = Math.floor(diffMins / 60);
+  if (hrs < 24)      return hrs === 1 ? "1 hr ago" : `${hrs} hrs ago`;
+
+  const days = Math.floor(hrs / 24);
+  if (days < 7)      return days === 1 ? "1 day ago" : `${days} days ago`;
+
+  // 7 din se zyada → actual date
   return new Date(iso).toLocaleDateString("en-IN", {
     day: "2-digit",
     month: "short",

@@ -19,6 +19,12 @@ import SessionRow from "../components/dashboard/SessionRow";
 
 const MAX_SESSIONS = 4;
 
+/** YYYY-MM-DD in local time */
+function todayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 export default function AstrologerDashboardScreen() {
   const router = useRouter();
   const user = useUser();
@@ -47,6 +53,13 @@ export default function AstrologerDashboardScreen() {
   const next = [...live, ...appointments.upcoming].slice(0, MAX_SESSIONS);
   const firstName = user?.name?.trim().split(" ")[0];
   const go = (href: string) => router.push(href as any);
+
+  // Aaj ke sessions — ongoing + upcoming filtered by today's date
+  const today = todayKey();
+  const todaySessions = [
+    ...live,
+    ...appointments.upcoming.filter((a) => a.scheduledAt.startsWith(today)),
+  ];
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -85,6 +98,38 @@ export default function AstrologerDashboardScreen() {
           />
         ) : null}
 
+        {/* ── Aaj ke sessions strip ─────────────────────────────────────── */}
+        <View style={styles.sectionRow}>
+          <View style={styles.sectionLabelRow}>
+            <Feather name="sun" size={14} color={AstroColors.gold} />
+            <Text style={styles.section}>Aaj ke sessions</Text>
+          </View>
+          <TouchableOpacity onPress={() => go("/(astrologer)/sessions")} hitSlop={8}>
+            <Text style={styles.seeAll}>Sab dekho</Text>
+          </TouchableOpacity>
+        </View>
+
+        {loading && todaySessions.length === 0 ? (
+          <ActivityIndicator color={AstroColors.brand} style={{ marginVertical: 12 }} />
+        ) : todaySessions.length === 0 ? (
+          <View style={styles.todayEmpty}>
+            <Feather name="moon" size={16} color={AstroColors.textMuted} />
+            <Text style={styles.todayEmptyText}>Aaj koi session nahi hai</Text>
+          </View>
+        ) : (
+          <View style={styles.list}>
+            {todaySessions.map((a) => (
+              <SessionRow
+                key={a.id}
+                appt={a}
+                live={a.status === "ongoing"}
+                onPress={() => go("/(astrologer)/sessions")}
+              />
+            ))}
+          </View>
+        )}
+
+        {/* ── Upcoming sessions ─────────────────────────────────────────── */}
         <View style={styles.sectionRow}>
           <Text style={styles.section}>Upcoming sessions</Text>
           {next.length > 0 ? (
@@ -157,8 +202,21 @@ const styles = StyleSheet.create({
   sub: { ...AstroType.caption, color: AstroColors.textSecondary, marginTop: 2 },
   content: { paddingHorizontal: 16, paddingBottom: 32, gap: 12 },
   sectionRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 12 },
+  sectionLabelRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   section: { ...AstroType.heading, color: AstroColors.ink, marginTop: 4 },
   seeAll: { ...AstroType.caption, fontWeight: "700", color: AstroColors.brand },
+  todayEmpty: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: AstroColors.surface,
+    borderRadius: AstroRadius.md,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: AstroColors.border,
+  },
+  todayEmptyText: { ...AstroType.caption, color: AstroColors.textMuted },
   list: { gap: 10 },
   empty: {
     alignItems: "center",

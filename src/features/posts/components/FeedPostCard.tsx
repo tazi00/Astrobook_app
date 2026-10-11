@@ -20,6 +20,7 @@ import { formatPostDate } from "../utils/time";
 import { prettyTag } from "../utils/tags";
 import PostActionsBar from "./PostActionsBar";
 import PostHero from "./PostHero";
+import RichCaption from "./RichCaption";
 
 const DOUBLE_TAP_MS = 280;
 const SIDE = 12;
@@ -52,7 +53,6 @@ function FeedPostCardImpl({
 }) {
   const { width } = useWindowDimensions();
   const heroW = width; // full screen width
-  const isVideo = post.mediaType === "VIDEO" && !!post.mediaUrl;
 
   // ── double-tap like ──
   const lastTap = useRef(0);
@@ -97,18 +97,6 @@ function FeedPostCardImpl({
     tapTimer.current = setTimeout(() => handlers.onOpenPost(post), DOUBLE_TAP_MS);
   };
 
-  const hero = (
-    <PostHero
-      post={post}
-      width={heroW}
-      aspect={1}
-      flat
-      square
-      playing={isActive}
-      startMuted
-    />
-  );
-
   return (
     <View style={styles.card}>
       {/* Author */}
@@ -146,31 +134,42 @@ function FeedPostCardImpl({
         )}
       </View>
 
-      {/* Media — video apna tap (mute) sambhalta hai */}
-      {isVideo ? (
-        hero
-      ) : (
-        <Pressable onPress={onMediaPress} accessibilityLabel="Post kholo">
-          {hero}
-          <View pointerEvents="none" style={styles.popWrap}>
-            <Animated.View
-              style={{ opacity: popOpacity, transform: [{ scale: popScale }] }}
-            >
-              <MaterialCommunityIcons
-                name="heart"
-                size={88}
-                color={AstroColors.onBrand}
-                style={styles.popHeart}
-              />
-            </Animated.View>
-          </View>
-        </Pressable>
-      )}
+      {/* Media — saare post types ek Pressable mein:
+          single tap = post detail, double tap = like.
+          Video ke liye tapToMute=false — mute sirf badge se hoga. */}
+      <Pressable onPress={onMediaPress} accessibilityLabel="Post kholo">
+        <PostHero
+          post={post}
+          width={heroW}
+          aspect={1}
+          flat
+          square
+          playing={isActive}
+          startMuted
+          tapToMute={false}
+        />
+        <View pointerEvents="none" style={styles.popWrap}>
+          <Animated.View
+            style={{ opacity: popOpacity, transform: [{ scale: popScale }] }}
+          >
+            <MaterialCommunityIcons
+              name="heart"
+              size={88}
+              color={AstroColors.onBrand}
+              style={styles.popHeart}
+            />
+          </Animated.View>
+        </View>
+      </Pressable>
 
       {post.mediaType !== "TEXT" && post.content ? (
-        <Text style={styles.caption} numberOfLines={2}>
-          {post.content}
-        </Text>
+        <View style={styles.captionWrap}>
+          <RichCaption
+            text={post.content}
+            maxLines={2}
+            onReadMore={() => handlers.onOpenPost(post)}
+          />
+        </View>
       ) : null}
 
       {post.tags?.length ? (
@@ -247,10 +246,7 @@ const styles = StyleSheet.create({
     textShadowRadius: 12,
   },
 
-  caption: {
-    ...AstroType.body,
-    color: AstroColors.text,
-    lineHeight: 20,
+  captionWrap: {
     marginTop: 12,
     paddingHorizontal: SIDE,
   },

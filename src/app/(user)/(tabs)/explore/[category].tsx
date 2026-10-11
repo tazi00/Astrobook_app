@@ -1,15 +1,18 @@
-import { AstroColors } from "@/constants/astro-theme";
+import { AstroColors, AstroShadow } from "@/constants/astro-theme";
 import AstrologerCard from "@/features/astrologer/components/AstrologerCard";
 import AstrologerCardSkeleton from "@/features/astrologer/components/AstrologerCardSkeleton";
 import { useAstrologersList } from "@/features/astrologer/hooks/useAstrologersList";
 import CategoryHero from "@/features/categories/components/CategoryHero";
 import { usePullStretch } from "@/features/categories/hooks/usePullStretch";
+import { categoriesService } from "@/features/categories/services";
+import type { CategoryStats } from "@/features/categories/types";
 import ServiceSlideCard from "@/features/consultation/components/ServiceSlideCard";
 import { consultationService } from "@/features/consultation/service";
 import type { BrowsedService } from "@/features/consultation/types";
 import ProfilePostTile from "@/features/posts/components/ProfilePostTile";
 import { useCategoryPosts } from "@/features/posts/hooks/useFeed";
 import { Feather } from "@expo/vector-icons";
+import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useMemo, useState } from "react";
@@ -28,16 +31,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const PAD = 16;
 const GAP = 12;
-// Astrologers slider: har "page" me 2 compact cards upar-neeche; agla page
-// thoda jhaankta hai taaki pata chale ki slide hota hai
 const ASTRO_SLIDE_W = SCREEN_WIDTH - PAD * 2 - 24;
 const SERVICE_W = 216;
 const POST_W = 156;
-
-// Astrobook ka signature "cosmic" navy — login/otp/onboarding mein already
-// establish hai. Har category hero isi navy mein blend hota hai neeche se,
-// taaki poora app ek hi visual identity share kare, sirf ek flat solid
-// color block na ho.
 const COSMIC_NAVY = "#121943";
 
 const CATEGORY_META: Record<
@@ -128,20 +124,332 @@ const CATEGORY_META: Record<
     description:
       "Gemstones carry powerful cosmic energies. Get expert guidance on which stones can enhance your luck, health, and prosperity.",
   },
-  "love-reading": {
-    emoji: "💕",
-    color: "#9D174D",
-    description:
-      "Gain deep insights into your love life, relationships, and romantic future through expert astrology and card readings.",
-  },
 };
+
+// ─── Stats Bar ────────────────────────────────────────────────────────────────
+
+function StatsBar({
+  stats,
+  astrologerCount,
+  accent,
+}: {
+  stats: CategoryStats | null;
+  astrologerCount: number;
+  accent: string;
+}) {
+  const items = [
+    {
+      icon: "file-text" as const,
+      value: stats?.postCount ?? "—",
+      label: "Posts",
+    },
+    {
+      icon: "users" as const,
+      value: astrologerCount > 0 ? astrologerCount : "—",
+      label: "Astrologers",
+    },
+    {
+      icon: "heart" as const,
+      value:
+        stats
+          ? stats.interestedUserCount >= 1000
+            ? `${(stats.interestedUserCount / 1000).toFixed(1)}k`
+            : String(stats.interestedUserCount)
+          : "—",
+      label: "Interested",
+    },
+  ];
+
+  return (
+    <View style={statsStyles.bar}>
+      {items.map((item, i) => (
+        <View key={item.label} style={statsStyles.item}>
+          <View style={[statsStyles.iconWrap, { backgroundColor: accent + "22" }]}>
+            <Feather name={item.icon} size={14} color={accent} />
+          </View>
+          <Text style={statsStyles.value}>{item.value}</Text>
+          <Text style={statsStyles.label}>{item.label}</Text>
+          {i < items.length - 1 && <View style={statsStyles.divider} />}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+const statsStyles = StyleSheet.create({
+  bar: {
+    flexDirection: "row",
+    marginHorizontal: PAD,
+    backgroundColor: AstroColors.surface,
+    borderRadius: 16,
+    padding: 14,
+    marginTop: -20,
+    ...AstroShadow.card,
+    zIndex: 10,
+  },
+  item: {
+    flex: 1,
+    alignItems: "center",
+    gap: 3,
+    position: "relative",
+  },
+  iconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 2,
+  },
+  value: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: AstroColors.ink,
+  },
+  label: {
+    fontSize: 10.5,
+    fontWeight: "600",
+    color: AstroColors.textMuted,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  divider: {
+    position: "absolute",
+    right: 0,
+    top: "15%",
+    bottom: "15%",
+    width: 1,
+    backgroundColor: AstroColors.border,
+  },
+});
+
+// ─── Trusted By Row ───────────────────────────────────────────────────────────
+
+function TrustedByRow({
+  stats,
+  accent,
+}: {
+  stats: CategoryStats | null;
+  accent: string;
+}) {
+  if (!stats || stats.interestedUserCount === 0) return null;
+
+  const avatars = stats.sampleAvatars.slice(0, 5);
+  const overflow = Math.max(0, stats.interestedUserCount - avatars.length);
+  const displayCount =
+    stats.interestedUserCount >= 1000
+      ? `${Math.floor(stats.interestedUserCount / 1000)}k+`
+      : `${stats.interestedUserCount}+`;
+
+  return (
+    <View style={trustedStyles.row}>
+      {/* Stacked avatar circles */}
+      <View style={trustedStyles.avatarStack}>
+        {avatars.map((url, i) => (
+          <Image
+            key={url + i}
+            source={{ uri: url }}
+            style={[trustedStyles.avatar, { marginLeft: i === 0 ? 0 : -10, zIndex: avatars.length - i }]}
+            contentFit="cover"
+          />
+        ))}
+        {/* +N overflow circle */}
+        {overflow > 0 && avatars.length > 0 && (
+          <View
+            style={[
+              trustedStyles.avatar,
+              { marginLeft: -10, backgroundColor: accent + "22", zIndex: 0 },
+            ]}
+          >
+            <Text style={[trustedStyles.overflowText, { color: accent }]}>
+              +{overflow > 999 ? "999" : overflow}
+            </Text>
+          </View>
+        )}
+      </View>
+      <View style={trustedStyles.textWrap}>
+        <Text style={trustedStyles.heading}>
+          <Text style={[trustedStyles.count, { color: accent }]}>{displayCount} </Text>
+          users trust this
+        </Text>
+        <Text style={trustedStyles.sub}>
+          People with an interest in this category
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+const trustedStyles = StyleSheet.create({
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: PAD,
+    gap: 14,
+    backgroundColor: AstroColors.surface,
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: AstroColors.border,
+  },
+  avatarStack: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  avatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: AstroColors.surface,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: AstroColors.brandTint,
+  },
+  overflowText: {
+    fontSize: 9,
+    fontWeight: "800",
+  },
+  textWrap: { flex: 1 },
+  heading: {
+    fontSize: 13.5,
+    fontWeight: "700",
+    color: AstroColors.ink,
+    lineHeight: 18,
+  },
+  count: {
+    fontWeight: "900",
+  },
+  sub: {
+    fontSize: 11.5,
+    color: AstroColors.textMuted,
+    marginTop: 1,
+  },
+});
+
+// ─── Section Header ───────────────────────────────────────────────────────────
+
+function SectionHeader({
+  title,
+  count,
+  onSeeAll,
+}: {
+  title: string;
+  count?: number;
+  onSeeAll?: () => void;
+}) {
+  return (
+    <View style={secStyles.row}>
+      <Text style={secStyles.title}>{title}</Text>
+      <View style={secStyles.right}>
+        {count !== undefined && count > 0 ? (
+          <View style={secStyles.badge}>
+            <Text style={secStyles.badgeText}>{count}</Text>
+          </View>
+        ) : null}
+        {onSeeAll ? (
+          <TouchableOpacity onPress={onSeeAll} hitSlop={8}>
+            <Text style={secStyles.seeAll}>See all</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+const secStyles = StyleSheet.create({
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: PAD,
+    paddingTop: 24,
+    paddingBottom: 12,
+  },
+  title: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: AstroColors.ink,
+  },
+  right: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  badge: {
+    backgroundColor: AstroColors.brandTint,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  badgeText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: AstroColors.brand,
+  },
+  seeAll: {
+    fontSize: 12.5,
+    fontWeight: "700",
+    color: AstroColors.brand,
+  },
+});
+
+// ─── Empty Placeholder ────────────────────────────────────────────────────────
+
+function EmptyPlaceholder({ icon, title, sub }: { icon: keyof typeof Feather.glyphMap; title: string; sub: string }) {
+  return (
+    <View style={[emptyStyles.box, { marginHorizontal: PAD }]}>
+      <View style={emptyStyles.iconCircle}>
+        <Feather name={icon} size={18} color={AstroColors.brand} />
+      </View>
+      <Text style={emptyStyles.title}>{title}</Text>
+      <Text style={emptyStyles.sub}>{sub}</Text>
+    </View>
+  );
+}
+
+const emptyStyles = StyleSheet.create({
+  box: {
+    alignItems: "center",
+    paddingVertical: 20,
+    paddingHorizontal: 20,
+    backgroundColor: AstroColors.surface,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: AstroColors.border,
+    gap: 4,
+  },
+  iconCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: AstroColors.brandTint,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
+  title: { fontSize: 13.5, fontWeight: "700", color: AstroColors.ink },
+  sub: {
+    fontSize: 12,
+    color: AstroColors.textMuted,
+    textAlign: "center",
+    lineHeight: 17,
+  },
+});
+
+// ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function CategoryScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { category, label } = useLocalSearchParams<{
+  const {
+    category,
+    label,
+    heroVideoUrl: heroVideoParam,
+  } = useLocalSearchParams<{
     category: string;
     label: string;
+    heroVideoUrl?: string;
   }>();
 
   const meta = CATEGORY_META[category] || {
@@ -163,13 +471,13 @@ export default function CategoryScreen() {
 
   const [services, setServices] = useState<BrowsedService[]>([]);
   const [servicesLoading, setServicesLoading] = useState(false);
+  const [stats, setStats] = useState<CategoryStats | null>(null);
 
   const astro = useAstrologersList(
     { category, sort: "recommended", limit: 20 },
     { enabled: !!category },
   );
 
-  // 2-2 ke pages (upar-neeche) — horizontal slide
   const astroPages = useMemo(() => {
     const pages: (typeof astro.astrologers)[] = [];
     for (let i = 0; i < astro.astrologers.length; i += 2) {
@@ -179,15 +487,22 @@ export default function CategoryScreen() {
   }, [astro.astrologers]);
 
   useEffect(() => {
+    if (!category) return;
     fetchPosts();
-    if (category) {
-      setServicesLoading(true);
-      consultationService
-        .browseByTag(category, 20, 0)
-        .then((res) => setServices(res.services))
-        .catch(() => setServices([]))
-        .finally(() => setServicesLoading(false));
-    }
+
+    // Services
+    setServicesLoading(true);
+    consultationService
+      .browseByTag(category, 20, 0)
+      .then((res) => setServices(res.services))
+      .catch(() => setServices([]))
+      .finally(() => setServicesLoading(false));
+
+    // Stats
+    categoriesService
+      .getCategoryStats(category)
+      .then(setStats)
+      .catch(() => setStats(null));
   }, [category]);
 
   const isEmpty =
@@ -213,9 +528,10 @@ export default function CategoryScreen() {
       <StatusBar style="light" />
       <Animated.ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
         {...scrollProps}
       >
+        {/* ── Hero ── */}
         <CategoryHero
           id={category}
           label={label}
@@ -225,48 +541,51 @@ export default function CategoryScreen() {
           paddingTop={insets.top + 50}
           pull={pull}
           maxPull={maxPull}
+          heroVideoUrl={heroVideoParam ?? null}
           onBack={() => router.back()}
         />
 
-        {/* ── Astrologers — horizontal slider ── */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeaderRow}>
-            <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>Astrologers</Text>
-            {astro.astrologers.length > 0 ? (
-              <Text style={styles.sectionCount}>{astro.astrologers.length}</Text>
-            ) : null}
-          </View>
+        {/* ── Stats Bar — overlaps hero bottom ── */}
+        <StatsBar
+          stats={stats}
+          astrologerCount={astro.astrologers.length}
+          accent={meta.color}
+        />
+
+        {/* ── Trusted by ── */}
+        <View style={{ marginTop: 12 }}>
+          <TrustedByRow stats={stats} accent={meta.color} />
         </View>
+
+        {/* ── Astrologers ── */}
+        <SectionHeader
+          title="Astrologers"
+          count={astro.astrologers.length}
+        />
         {astro.loading ? (
           <View style={{ paddingHorizontal: PAD, gap: 10 }}>
             <AstrologerCardSkeleton variant="compact" />
             <AstrologerCardSkeleton variant="compact" />
           </View>
         ) : astro.error ? (
-          <View style={styles.padded}>
-            <View style={styles.emptyBox}>
-              <Text style={styles.emptyTitle}>Astrologers load nahi hue</Text>
+          <View style={{ paddingHorizontal: PAD }}>
+            <View style={styles.errorBox}>
+              <Text style={styles.errorText}>Astrologers load nahi hue</Text>
               <TouchableOpacity
                 style={styles.retryBtn}
                 onPress={() => astro.refetch()}
                 accessibilityRole="button"
               >
-                <Text style={styles.retryText}>Dobara try karo</Text>
+                <Text style={styles.retryBtnText}>Dobara try karo</Text>
               </TouchableOpacity>
             </View>
           </View>
         ) : astro.astrologers.length === 0 ? (
-          <View style={styles.padded}>
-            <View style={styles.emptyBox}>
-              <View style={styles.emptyIconCircle}>
-                <Feather name="user" size={20} color={AstroColors.brand} />
-              </View>
-              <Text style={styles.emptyTitle}>Abhi koi astrologer nahi</Text>
-              <Text style={styles.emptySubtext}>
-                Is category ke astrologers jaldi add honge
-              </Text>
-            </View>
-          </View>
+          <EmptyPlaceholder
+            icon="user"
+            title="Abhi koi astrologer nahi"
+            sub="Is category ke astrologers jaldi add honge"
+          />
         ) : (
           <FlatList
             data={astroPages}
@@ -287,24 +606,22 @@ export default function CategoryScreen() {
           />
         )}
 
-        {/* ── Consultancies — horizontal slider ── */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Consultancies</Text>
-        </View>
+        {/* ── Consultancies ── */}
+        <SectionHeader
+          title="Consultancies"
+          count={services.length}
+        />
         {servicesLoading ? (
-          <ActivityIndicator color={AstroColors.brand} style={{ marginTop: 4 }} />
+          <ActivityIndicator
+            color={AstroColors.brand}
+            style={{ marginVertical: 12 }}
+          />
         ) : services.length === 0 ? (
-          <View style={styles.padded}>
-            <View style={styles.emptyBox}>
-              <View style={styles.emptyIconCircle}>
-                <Feather name="users" size={20} color={AstroColors.brand} />
-              </View>
-              <Text style={styles.emptyTitle}>Abhi koi consultancy nahi</Text>
-              <Text style={styles.emptySubtext}>
-                Is category ke astrologers jaldi add honge
-              </Text>
-            </View>
-          </View>
+          <EmptyPlaceholder
+            icon="briefcase"
+            title="Abhi koi consultancy nahi"
+            sub="Is category ke experts jaldi join honge"
+          />
         ) : (
           <FlatList
             data={services}
@@ -321,24 +638,22 @@ export default function CategoryScreen() {
           />
         )}
 
-        {/* ── Recent Posts — single row ── */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Recent Posts</Text>
-        </View>
+        {/* ── Recent Posts ── */}
+        <SectionHeader
+          title="Recent Posts"
+          count={posts.length}
+        />
         {postsLoading && posts.length === 0 ? (
-          <ActivityIndicator color={AstroColors.brand} style={{ marginTop: 4 }} />
+          <ActivityIndicator
+            color={AstroColors.brand}
+            style={{ marginVertical: 12 }}
+          />
         ) : posts.length === 0 ? (
-          <View style={styles.padded}>
-            <View style={styles.emptyBox}>
-              <View style={styles.emptyIconCircle}>
-                <Feather name="file-text" size={20} color={AstroColors.brand} />
-              </View>
-              <Text style={styles.emptyTitle}>Koi post nahi mila</Text>
-              <Text style={styles.emptySubtext}>
-                Astrologers is category mein post karenge toh yahan dikhega
-              </Text>
-            </View>
-          </View>
+          <EmptyPlaceholder
+            icon="image"
+            title="Koi post nahi mila"
+            sub="Astrologers is category mein post karenge toh yahan dikhega"
+          />
         ) : (
           <FlatList
             data={posts}
@@ -372,15 +687,17 @@ export default function CategoryScreen() {
           />
         )}
 
-        {/* Sab kuch khaali ho to dead-end na lage */}
+        {/* ── Dead-end fallback ── */}
         {isEmpty && otherCategories.length > 0 && (
-          <View style={styles.exploreMoreSection}>
-            <Text style={styles.sectionTitle}>Aur bhi explore karo</Text>
-            <View style={styles.categoryChips}>
+          <View style={styles.exploreMore}>
+            <Text style={[secStyles.title, { paddingHorizontal: PAD }]}>
+              Aur bhi explore karo
+            </Text>
+            <View style={styles.chipRow}>
               {otherCategories.map((key) => (
                 <TouchableOpacity
                   key={key}
-                  style={styles.categoryChip}
+                  style={styles.chip}
                   activeOpacity={0.85}
                   onPress={() =>
                     router.push({
@@ -389,7 +706,7 @@ export default function CategoryScreen() {
                     })
                   }
                 >
-                  <Text style={styles.categoryChipText}>{prettify(key)}</Text>
+                  <Text style={styles.chipText}>{prettify(key)}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -402,75 +719,38 @@ export default function CategoryScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: AstroColors.canvas },
-
-  section: { paddingTop: 22, paddingHorizontal: PAD },
-  padded: { paddingHorizontal: PAD },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: AstroColors.ink,
-    marginBottom: 12,
-  },
-  sectionHeaderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 12,
-  },
-  sectionCount: {
-    fontSize: 11.5,
-    fontWeight: "800",
-    color: AstroColors.brand,
-    backgroundColor: AstroColors.brandTint,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-    overflow: "hidden",
-  },
-  // Sliders full-bleed; pehla/aakhri item screen edge se PAD door
   sliderContent: { paddingHorizontal: PAD, gap: GAP, paddingBottom: 6 },
 
-  emptyBox: {
+  errorBox: {
     alignItems: "center",
-    paddingVertical: 20,
-    paddingHorizontal: 20,
+    paddingVertical: 18,
+    paddingHorizontal: 16,
     backgroundColor: AstroColors.surface,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: AstroColors.border,
-    gap: 4,
+    gap: 10,
   },
-  emptyIconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: AstroColors.canvas,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 6,
-  },
-  emptyTitle: { fontSize: 13.5, fontWeight: "700", color: "#374151" },
-  emptySubtext: {
-    fontSize: 12,
-    color: AstroColors.textMuted,
-    textAlign: "center",
-    lineHeight: 17,
-  },
+  errorText: { fontSize: 13.5, fontWeight: "700", color: "#374151" },
   retryBtn: {
-    marginTop: 6,
-    minHeight: 40,
+    minHeight: 38,
     paddingHorizontal: 18,
-    borderRadius: 12,
+    borderRadius: 10,
     borderWidth: 1.5,
     borderColor: AstroColors.brand,
     alignItems: "center",
     justifyContent: "center",
   },
-  retryText: { fontSize: 13, fontWeight: "800", color: AstroColors.brand },
+  retryBtnText: { fontSize: 13, fontWeight: "800", color: AstroColors.brand },
 
-  exploreMoreSection: { paddingTop: 24, paddingHorizontal: PAD },
-  categoryChips: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  categoryChip: {
+  exploreMore: { paddingTop: 24, gap: 14 },
+  chipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    paddingHorizontal: PAD,
+  },
+  chip: {
     backgroundColor: AstroColors.surface,
     borderWidth: 1,
     borderColor: AstroColors.border,
@@ -478,5 +758,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 9,
   },
-  categoryChipText: { fontSize: 12.5, fontWeight: "600", color: "#4A4468" },
+  chipText: { fontSize: 12.5, fontWeight: "600", color: "#4A4468" },
 });

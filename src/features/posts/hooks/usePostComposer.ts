@@ -1,9 +1,13 @@
+import { queryKeys } from "@/lib/queryClient";
+import { useQueryClient } from "@tanstack/react-query";
 import * as FileSystemLegacy from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
 import { useState } from "react";
 import { Alert } from "react-native";
+import { Video as VideoCompressor } from "react-native-compressor";
 import {
   BG_COLORS,
+  MAX_CUSTOM_TAGS,
   MAX_TAGS,
   MAX_VIDEO_DURATION_SEC,
   MAX_VIDEO_SIZE_MB,
@@ -13,8 +17,8 @@ import {
 } from "../constants";
 import { postsService } from "../services/posts.service";
 import type { MediaType, Post } from "../types/post.types";
-import { useCreatePost, useImageKitUpload } from "./usePosts";
 import { useInvalidatePosts } from "./useMyPosts";
+import { useCreatePost, useImageKitUpload } from "./usePosts";
 
 const MAX_VIDEO_SIZE_BYTES = MAX_VIDEO_SIZE_MB * 1024 * 1024;
 
@@ -22,6 +26,16 @@ type Media = { uri: string; type: Exclude<MediaType, "TEXT">; duration?: number 
 
 const clamp = (n: number, min: number, max: number) =>
   Math.max(min, Math.min(max, n));
+
+// Free-text tag sanitize: lowercase, spaces→dash, only alphanum+hindi+dash, max 30 chars
+const sanitizeCustomTag = (text: string): string =>
+  text
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_]+/g, "-")
+    .replace(/[^a-z0-9ऀ-ॿ-]/g, "")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 30);
 
 // Post banane ka saara state + logic (UI PostComposer me hai).
 // Sticker ki position PostHero ke hisaab se: x,y = chip ka anchor (0..1),
@@ -45,12 +59,20 @@ export function usePostComposer(onPublished: () => void, editing?: Post) {
   const [stickerFg, setStickerFg] = useState(STICKER_TEXT_COLORS[0]!);
   const [stickerPos, setStickerPos] = useState({ x: 0.35, y: 0.45 });
 
+  const [customTags, setCustomTags] = useState<string[]>([]);
+  const [customTagInput, setCustomTagInput] = useState("");
+
+  // Video compression progress (0–100)
+  const [compressing, setCompressing] = useState(false);
+  const [compressProgress, setCompressProgress] = useState(0);
+
   const { uploadImage, uploading, progress } = useImageKitUpload();
   const { createPost, loading: posting } = useCreatePost();
   const invalidate = useInvalidatePosts();
+  const qc = useQueryClient();
 
   const type: MediaType = editing ? editing.mediaType : (media?.type ?? "TEXT");
-  const busy = uploading || posting || saving;
+  const busy = uploading || posting || saving || compressing;
   const sameTags =
     tags.length === (editing?.tags ?? []).length &&
     tags.every((t) => editing?.tags?.includes(t));
@@ -67,11 +89,31 @@ export function usePostComposer(onPublished: () => void, editing?: Post) {
   const reset = () => {
     setContent("");
     setTags([]);
+    setCustomTags([]);
+    setCustomTagInput("");
     setMedia(null);
     setStickerOn(false);
     setStickerText("");
     setStickerPos({ x: 0.35, y: 0.45 });
   };
+
+  const addCustomTag = () => {
+    const tag = sanitizeCustomTag(customTagInput);
+    if (!tag) return;
+    if (customTags.includes(tag) || tags.includes(tag)) {
+      setCustomTagInput("");
+      return;
+    }
+    if (customTags.length >= MAX_CUSTOM_TAGS) {
+      Alert.alert("Limit", `Max ${MAX_CUSTOM_TAGS} custom tags add kar sakte ho`);
+      return;
+    }
+    setCustomTags((prev) => [...prev, tag]);
+    setCustomTagInput("");
+  };
+
+  const removeCustomTag = (tag: string) =>
+    setCustomTags((prev) => prev.filter((t) => t !== tag));
 
   const toggleTag = (id: string) =>
     setTags((prev) => {
@@ -83,14 +125,14 @@ export function usePostComposer(onPublished: () => void, editing?: Post) {
       return [...prev, id];
     });
 
-  // Photo = feed jaisa square crop, Video = trim (max duration ke liye zaroori)
+  // Photo = feed jaisa square crop, Video = duration check → compress (720p/2Mbps) → size check
   const pick = async (kind: "image" | "video") => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: [kind === "image" ? "images" : "videos"],
       allowsEditing: true,
       aspect: [1, 1],
       videoMaxDuration: MAX_VIDEO_DURATION_SEC,
-      quality: 0.8,
+      quality: 0.85,
     });
     if (result.canceled || !result.assets[0]) return;
     const asset = result.assets[0];
@@ -100,8 +142,11 @@ export function usePostComposer(onPublished: () => void, editing?: Post) {
       return;
     }
 
-    setPicking(true); // size-check me thoda time lag sakta hai
+    // ── VIDEO path ──
+    setPicking(true);
+    let finalUri = asset.uri;
     try {
+      // 1. Duration check
       const durationSec = asset.duration ? Math.round(asset.duration / 1000) : 0;
       if (durationSec > MAX_VIDEO_DURATION_SEC) {
         Alert.alert(
@@ -110,22 +155,44 @@ export function usePostComposer(onPublished: () => void, editing?: Post) {
         );
         return;
       }
-      // fileSize kabhi missing hota hai (trimmed videos) — FileSystem se fallback
-      let sizeBytes = (asset as any).fileSize ?? (asset as any).filesize;
-      if (!sizeBytes) {
-        const info = await FileSystemLegacy.getInfoAsync(asset.uri, { size: true } as any);
-        sizeBytes = (info as any).size ?? 0;
+
+      // 2. Compress → 720p, 2 Mbps, H.264
+      setPicking(false);
+      setCompressing(true);
+      setCompressProgress(0);
+      try {
+        finalUri = await VideoCompressor.compress(
+          asset.uri,
+          {
+            compressionMethod: "manual",
+            maxSize: 1280,      // max dimension (720p = 1280px longer side)
+            bitrate: 2_000_000, // 2 Mbps — 5 min at this rate ≈ 75 MB
+          },
+          (progress) => setCompressProgress(Math.round(progress * 100)),
+        );
+      } catch (compressErr) {
+        // Compression fail hone par original use karo, size check karunga abhi bhi
+        console.warn("Video compression failed, using original:", compressErr);
+        finalUri = asset.uri;
       }
+
+      // 3. Size check (compressed file pe)
+      let sizeBytes = 0;
+      const info = await FileSystemLegacy.getInfoAsync(finalUri, { size: true } as any);
+      sizeBytes = (info as any).size ?? 0;
       if (sizeBytes > MAX_VIDEO_SIZE_BYTES) {
         Alert.alert(
           "Video Bahut Badi Hai",
-          `Max ${MAX_VIDEO_SIZE_MB}MB tak ki video allowed hai — thodi chhoti quality mein try karo.`,
+          `${MAX_VIDEO_SIZE_MB}MB se badi video upload nahi ho sakti — compress karke try karo.`,
         );
         return;
       }
-      setMedia({ uri: asset.uri, type: "VIDEO", duration: durationSec });
+
+      setMedia({ uri: finalUri, type: "VIDEO", duration: durationSec });
     } finally {
       setPicking(false);
+      setCompressing(false);
+      setCompressProgress(0);
     }
   };
 
@@ -172,16 +239,10 @@ export function usePostComposer(onPublished: () => void, editing?: Post) {
       mediaUrl = url;
     }
 
-    const post = await createPost({
-      content,
-      mediaUrl,
-      mediaType: type,
-      tags,
-      ...(type === "TEXT" ? { bgColor, textColor } : {}),
-      ...(media?.type === "VIDEO" && media.duration
-        ? { durationSeconds: media.duration }
-        : {}),
-      ...(media?.type === "IMAGE" && stickerOn && stickerText.trim()
+    const allTags = [...tags, ...customTags];
+
+    const stickerPayload =
+      media?.type === "IMAGE" && stickerOn && stickerText.trim()
         ? {
             stickerText: stickerText.trim(),
             stickerX: stickerPos.x,
@@ -189,9 +250,37 @@ export function usePostComposer(onPublished: () => void, editing?: Post) {
             stickerTextColor: stickerFg,
             stickerBgColor: stickerBg,
           }
+        : {};
+
+    const post = await createPost({
+      content,
+      mediaUrl,
+      mediaType: type,
+      tags: allTags,
+      ...(type === "TEXT" ? { bgColor, textColor } : {}),
+      ...(media?.type === "VIDEO" && media.duration
+        ? { durationSeconds: media.duration }
         : {}),
+      ...stickerPayload,
     });
     if (!post) return; // useCreatePost ne error dikha diya
+
+    // Optimistic: createPost response mein sticker fields hoti hain (INSERT
+    // RETURNING *), isko turant feed cache mein prepend karo taaki user ko
+    // publish ke baad instantly sticker dikh sake — refetch ka wait na karna pade.
+    qc.setQueryData(queryKeys.posts.feed, (old: any) => {
+      if (!old) return old;
+      const enriched = { ...post, astrologerName: post.astrologerName ?? "Astrologer" };
+      return {
+        ...old,
+        pages: old.pages.map((page: any, i: number) =>
+          i === 0
+            ? { ...page, posts: [enriched, ...page.posts] }
+            : page,
+        ),
+      };
+    });
+
     invalidate();
     reset();
     onPublished();
@@ -200,12 +289,14 @@ export function usePostComposer(onPublished: () => void, editing?: Post) {
   return {
     content, setContent,
     tags, toggleTag,
+    customTags, customTagInput, setCustomTagInput, addCustomTag, removeCustomTag,
     media, type, picking, pick, removeMedia,
     bgColor, setBgColor, textColor, setTextColor,
     stickerOn, setStickerOn, stickerText, setStickerText,
     stickerBg, setStickerBg, stickerFg, setStickerFg,
     stickerPos, moveSticker,
     uploading, posting, progress, busy,
+    compressing, compressProgress,
     canPublish, isDirty, publish, reset,
   };
 }

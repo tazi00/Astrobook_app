@@ -15,6 +15,7 @@ export type AuthUser = {
   isAstrologer: boolean; // ← added
   avatarUrl: string | null;
   bio: string | null;
+  interests: string[] | null;
 };
 
 export type AuthResult = {

@@ -8,7 +8,7 @@ import {
 import { useUser } from "@/features/auth/store/auth.store";
 import { useToggleFollow } from "@/features/follows/hooks/useFollow";
 import { Feather } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -24,6 +24,7 @@ import {
 import CommentsSheet from "../components/CommentsSheet";
 import FeedPostCard, { type FeedCardHandlers } from "../components/FeedPostCard";
 import FeedSkeleton from "../components/FeedSkeleton";
+import PostComposer from "../components/PostComposer";
 import { useFeedPosts } from "../hooks/useFeed";
 import { useLikePost } from "../hooks/usePosts";
 import type { Post } from "../types/post.types";
@@ -40,8 +41,18 @@ export default function FeedScreen() {
     useFeedPosts();
 
   const [visibleVideoId, setVisibleVideoId] = useState<string | null>(null);
+  // Screen focus track — navigate away hone par sab videos pause ho jayein
+  const [screenFocused, setScreenFocused] = useState(true);
+  useFocusEffect(
+    useCallback(() => {
+      setScreenFocused(true);
+      return () => setScreenFocused(false); // screen background mein gayi
+    }, []),
+  );
+
   const [sheetPostId, setSheetPostId] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [composerOpen, setComposerOpen] = useState(false);
 
   // Cards memo hain — handlers stable rakhne ke liye latest values ref me
   const latest = useRef({ toggleLike, toggleFollow, updatePost });
@@ -78,9 +89,11 @@ export default function FeedScreen() {
         setSheetOpen(true);
       },
       onShare: async (p) => {
+        const shareUrl = `https://astrobook.in/share/post/${p.id}`;
         try {
           await Share.share({
-            message: `${p.astrologerName ?? "Astrobook"} ka post dekho: astrobook://post/${p.id}`,
+            message: `${p.astrologerName ?? "Astrobook"} ka post dekho Astrobook pe! ${shareUrl}`,
+            url: shareUrl, // iOS Share Sheet ke liye
           });
         } catch {
           // cancelled
@@ -108,12 +121,12 @@ export default function FeedScreen() {
     ({ item }: { item: Post }) => (
       <FeedPostCard
         post={item}
-        isActive={visibleVideoId === item.id}
+        isActive={screenFocused && visibleVideoId === item.id}
         isMine={item.astrologerId === user?.id}
         handlers={handlers}
       />
     ),
-    [visibleVideoId, user?.id, handlers],
+    [screenFocused, visibleVideoId, user?.id, handlers],
   );
 
   const sheetPost = posts.find((p) => p.id === sheetPostId);
@@ -125,8 +138,8 @@ export default function FeedScreen() {
           user?.isAstrologer ? (
             <TouchableOpacity
               style={styles.addPostBtn}
-              onPress={() => router.push("/(astrologer)/posts" as any)}
-              accessibilityLabel="Naya post"
+              onPress={() => setComposerOpen(true)}
+              accessibilityLabel="Naya post banao"
             >
               <Feather name="plus-circle" size={26} color={AstroColors.brand} />
             </TouchableOpacity>
@@ -154,7 +167,25 @@ export default function FeedScreen() {
           data={posts}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
-          extraData={visibleVideoId}
+          extraData={[visibleVideoId, screenFocused]}
+          // Interests nudge — sirf regular users ke liye jinhone abhi tak
+          // koi interest select nahi kiya. Ek baar interests set ho jaayein
+          // toh yeh banner automatically hat jaata hai.
+          ListHeaderComponent={
+            user && !user.isAstrologer && (!user.interests || user.interests.length === 0) ? (
+              <TouchableOpacity
+                style={styles.nudge}
+                activeOpacity={0.8}
+                onPress={() => router.push("/(user)/edit-profile" as any)}
+              >
+                <Feather name="star" size={14} color={AstroColors.brand} />
+                <Text style={styles.nudgeText}>
+                  Apni pasand select karo — feed personal ho jaayegi!
+                </Text>
+                <Text style={styles.nudgeLink}>Select karo →</Text>
+              </TouchableOpacity>
+            ) : null
+          }
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -191,6 +222,14 @@ export default function FeedScreen() {
           onClose={() => setSheetOpen(false)}
         />
       ) : null}
+
+      {/* Post Composer — astrologer ke plus button se seedha khulta hai */}
+      {user?.isAstrologer ? (
+        <PostComposer
+          visible={composerOpen}
+          onClose={() => setComposerOpen(false)}
+        />
+      ) : null}
     </View>
   );
 }
@@ -215,5 +254,29 @@ const styles = StyleSheet.create({
     textAlign: "center",
     color: AstroColors.textMuted,
     paddingVertical: 24,
+  },
+  nudge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 4,
+    backgroundColor: AstroColors.brandTint,
+    borderRadius: AstroRadius.md,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: AstroColors.border,
+  },
+  nudgeText: {
+    ...AstroType.caption,
+    flex: 1,
+    color: AstroColors.textSecondary,
+  },
+  nudgeLink: {
+    ...AstroType.caption,
+    color: AstroColors.brand,
+    fontWeight: "600",
   },
 });

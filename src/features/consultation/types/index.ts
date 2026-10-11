@@ -109,15 +109,18 @@ export type UpdateServiceVariantPayload = {
   price: number;
 };
 
-// ─── Availability Window ────────────────────────────────────────────────────
+// ─── Availability Window (specific date) ────────────────────────────────────
 // Matches `availability_windows` table
+
+export type AvailabilityWindowType = 'specific_open' | 'specific_blocked';
 
 export type AvailabilityWindow = {
   id: string;
   astrologerId: string;
+  windowType: AvailabilityWindowType;
   date: string; // YYYY-MM-DD
-  startTime: string; // HH:MM (24h)
-  endTime: string; // HH:MM (24h)
+  startTime: string | null; // HH:MM (24h) — null for all-day blocked
+  endTime: string | null;   // HH:MM (24h) — null for all-day blocked
   timezone: string;
   isActive: boolean;
   createdAt: string;
@@ -128,15 +131,39 @@ export type CreateAvailabilityPayload = {
   date: string; // YYYY-MM-DD
   startTime: string; // HH:MM (24h)
   endTime: string; // HH:MM (24h)
+  windowType?: AvailabilityWindowType; // default: specific_open
   timezone?: string; // defaults to Asia/Kolkata on backend
+};
+
+// ─── Recurring Availability ──────────────────────────────────────────────────
+// Matches `recurring_availability` table
+
+export type RecurringAvailability = {
+  id: string;
+  astrologerId: string;
+  dayOfWeek: number; // 0=Sun, 1=Mon, ..., 6=Sat
+  startTime: string; // HH:MM (24h)
+  endTime: string;   // HH:MM (24h)
+  timezone: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CreateRecurringAvailabilityPayload = {
+  daysOfWeek: number[]; // 0–6, multiple days at once
+  startTime: string;    // HH:MM (24h)
+  endTime: string;      // HH:MM (24h)
+  timezone?: string;    // defaults to Asia/Kolkata
 };
 
 // ─── Slots (user-facing booking) ────────────────────────────────────────────
 
 export type TimeSlot = {
   startTime: string; // ISO string
-  endTime: string; // ISO string
+  endTime: string;   // ISO string
   available: boolean;
+  softLocked: boolean; // true = koi aur dekh raha hai (10-min hold), faded dikhega
 };
 
 export type GetSlotsQuery = {
@@ -192,6 +219,10 @@ export type InitiateBookingPayload = {
 
 export type CancelAppointmentPayload = {
   reason?: string;
+  // 'astrologer' = astrologer ne cancel kiya (cancellation_request banegi)
+  // 'user' = user ne cancel kiya
+  // undefined = legacy (backend fallback karta hai)
+  cancelledBy?: "user" | "astrologer";
 };
 
 // ─── Detailed / joined appointment shape ────────────────────────────────────
@@ -228,6 +259,8 @@ export type AppointmentDetailed = {
   userName: string | null;
   astrologerId: string;
   userId: string;
+  // Kisne cancel kiya — null agar purana data ya backend ne set nahi kiya
+  cancelledBy?: "user" | "astrologer" | null;
 };
 
 export type AppointmentWithChildren = AppointmentDetailed & {
@@ -249,4 +282,43 @@ export type GroupedAppointments = {
 export type ScheduleResponse = {
   date: string;
   schedule: AppointmentDetailed[];
+};
+
+// ─── Cancellation Request (astrologer-initiated) ─────────────────────────────
+// Jab astrologer slot delete/cancel karta hai → backend ek cancellation_request
+// banata hai → user ko notification jaati hai → user 24h mein choose karta hai.
+
+export type CancellationRequestStatus = "pending" | "refunded" | "credited";
+
+export type CancellationRequest = {
+  id: string;
+  appointmentId: string;
+  userId: string;
+  amount: string; // decimal as string
+  status: CancellationRequestStatus;
+  expiresAt: string; // ISO — 24h baad auto-refund
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ClaimCancellationPayload = {
+  // 'refund' = Razorpay refund (7 days); 'wallet' = AstroBook wallet credit (instant)
+  action: "refund" | "wallet";
+};
+
+// ─── Wallet ───────────────────────────────────────────────────────────────────
+// AstroBook ke andar closed-loop credits — cash out nahi hoga.
+
+export type WalletBalance = {
+  balance: string; // decimal as string (e.g. "250.00")
+  currency: string; // "INR"
+};
+
+export type WalletTransaction = {
+  id: string;
+  amount: string;
+  type: "credit" | "debit";
+  source: "cancellation_refund" | "manual" | "booking_payment";
+  description: string | null;
+  createdAt: string;
 };

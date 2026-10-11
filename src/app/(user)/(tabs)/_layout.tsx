@@ -1,13 +1,15 @@
+import { ModeChip } from "@/components/ModeChip";
+import { useAuthStore } from "@/features/auth/store/auth.store";
 import { Feather } from "@expo/vector-icons";
-import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
-import { Tabs } from "expo-router";
+import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons"; // star-four-points (AstroVerse)
+import { Tabs, usePathname } from "expo-router";
 import { useEffect, useRef } from "react";
 import {
-    Animated,
-    Dimensions,
-    StyleSheet,
-    TouchableOpacity,
-    View,
+  Animated,
+  Dimensions,
+  StyleSheet,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -33,13 +35,11 @@ const TABS = [
 
   {
     name: "astrologers",
-    icon: (color: string) => <Feather name="user" size={22} color={color} />,
+    icon: (color: string) => <Feather name="users" size={22} color={color} />,
   },
   {
     name: "profile",
-    icon: (color: string) => (
-      <MaterialCommunityIcons name="zodiac-aries" size={22} color={color} />
-    ),
+    icon: (color: string) => <Feather name="user" size={22} color={color} />,
   },
 ];
 
@@ -101,20 +101,32 @@ function CustomTabBar({ state, navigation }: any) {
 }
 
 export default function TabsLayout() {
+  const isAstrologer = useAuthStore((s) => s.user?.role === "astrologer");
+  const pathname     = usePathname();
+
+  // Profile page pe "Go to Dashboard" button pehle se hai —
+  // chip wahan hide karo taaki do duplicate buttons na dikhen
+  const isOnProfile = pathname.endsWith("/profile");
+
   return (
-    <Tabs
-      tabBar={(props) => <CustomTabBar {...props} />}
-      screenOptions={{ headerShown: false }}
-    >
-      <Tabs.Screen name="feed" />
-      {/* Explore ka apna nested stack hai (index -> [category]). Tab chhodte hi
-          usse root pe pop karo, warna Home se wapas aane par purani category
-          detail page hi khulta tha. */}
-      <Tabs.Screen name="explore" options={{ popToTopOnBlur: true }} />
-      <Tabs.Screen name="astroverse" />
-      <Tabs.Screen name="astrologers" />
-      <Tabs.Screen name="profile" />
-    </Tabs>
+    <View style={{ flex: 1 }}>
+      <Tabs
+        tabBar={(props) => <CustomTabBar {...props} />}
+        screenOptions={{ headerShown: false }}
+      >
+        <Tabs.Screen name="feed" />
+        {/* Explore ka apna nested stack hai (index -> [category]). Tab chhodte hi
+            usse root pe pop karo, warna Home se wapas aane par purani category
+            detail page hi khulta tha. */}
+        <Tabs.Screen name="explore" options={{ popToTopOnBlur: true }} />
+        <Tabs.Screen name="astroverse" />
+        <Tabs.Screen name="astrologers" />
+        <Tabs.Screen name="profile" />
+      </Tabs>
+
+      {/* Astrologer ke liye floating Dashboard chip — profile pe nahi dikhta */}
+      {isAstrologer && !isOnProfile && <ModeChip mode="user" />}
+    </View>
   );
 }
 

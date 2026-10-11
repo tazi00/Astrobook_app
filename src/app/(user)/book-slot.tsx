@@ -1,10 +1,11 @@
 import Header from "@/components/header";
+import { toast } from "@/components/toast";
 import { useAstrologerProfile } from "@/features/astrologer/hooks/useAstrologerProfile";
 import { consultationService } from "@/features/consultation/service";
 import type { ConsultationServiceVariant, TimeSlot } from "@/features/consultation/types";
 import { Feather } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -101,6 +102,11 @@ export default function BookSlotScreen() {
   const [slots, setSlots] = useState<TimeSlot[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
+  const [locking, setLocking] = useState(false);
+
+  // Refs for useEffect cleanup — can't read latest state inside return fn
+  const selectedSlotRef = useRef<TimeSlot | null>(null);
+  const proceedingRef = useRef(false); // true = user went to checkout, don't release lock
 
   // Astrologer ke saare upcoming available dates fetch karo
   useEffect(() => {
@@ -118,26 +124,79 @@ export default function BookSlotScreen() {
 
   // Date change hone pe uss din ke slots fetch karo — variant ki duration
   // se slot length decide hoti hai
+  const fetchSlots = useCallback(
+    (date: string) => {
+      if (!astroId || !serviceId || !date) return;
+      setSlotsLoading(true);
+      consultationService
+        .getSlots({ astrologerId: astroId, serviceId, variantId: variant?.id, date })
+        .then(setSlots)
+        .catch(() => setSlots([]))
+        .finally(() => setSlotsLoading(false));
+    },
+    [astroId, serviceId, variant?.id],
+  );
+
   useEffect(() => {
-    if (!astroId || !serviceId || !selectedDate) return;
-    setSlotsLoading(true);
-    setSelectedSlot(null);
-    consultationService
-      .getSlots({
-        astrologerId: astroId,
-        serviceId,
-        variantId: variant?.id,
-        date: selectedDate,
-      })
-      .then(setSlots)
-      .catch(() => setSlots([]))
-      .finally(() => setSlotsLoading(false));
-  }, [astroId, serviceId, selectedDate, variant?.id]);
+    if (!selectedDate) return;
+    // Release any previous lock when user switches date
+    if (selectedSlotRef.current) {
+      consultationService.releaseSlot(astroId, selectedSlotRef.current.startTime);
+      selectedSlotRef.current = null;
+      setSelectedSlot(null);
+    }
+    fetchSlots(selectedDate);
+  }, [astroId, selectedDate, fetchSlots]);
+
+  // Release lock when screen unmounts (user went back) — unless proceeding to checkout
+  useEffect(() => {
+    return () => {
+      if (!proceedingRef.current && selectedSlotRef.current) {
+        consultationService.releaseSlot(astroId, selectedSlotRef.current.startTime);
+      }
+    };
+  }, [astroId]);
 
   const { morning, afternoon, evening } = groupSlots(slots);
 
+  // Slot tap → try to acquire soft lock. If someone else holds it, show error + refresh.
+  const handleSelectSlot = async (slot: TimeSlot) => {
+    if (!slot.available || locking) return;
+
+    // Tap on already-selected slot → deselect + release
+    if (selectedSlotRef.current?.startTime === slot.startTime) {
+      consultationService.releaseSlot(astroId, slot.startTime);
+      selectedSlotRef.current = null;
+      setSelectedSlot(null);
+      return;
+    }
+
+    // Release previous slot's lock before acquiring new one
+    if (selectedSlotRef.current) {
+      consultationService.releaseSlot(astroId, selectedSlotRef.current.startTime);
+      selectedSlotRef.current = null;
+      setSelectedSlot(null);
+    }
+
+    setLocking(true);
+    const acquired = await consultationService.lockSlot(astroId, slot.startTime);
+    setLocking(false);
+
+    if (!acquired) {
+      // Koi aur pehle se dekh raha hai — refresh karke latest state dikhao
+      if (selectedDate) fetchSlots(selectedDate);
+      toast.show("Yeh slot abhi koi aur dekh raha hai, doosra try karo", "error");
+      return;
+    }
+
+    selectedSlotRef.current = slot;
+    setSelectedSlot(slot);
+  };
+
   const handleProceedToCheckout = () => {
     if (!selectedSlot || !astrologer || !service) return;
+    // Lock ko release MAT karo — checkout mein lock tab tak rahega
+    proceedingRef.current = true;
     router.push({
       pathname: "/(user)/checkout" as any,
       params: {
@@ -181,19 +240,21 @@ export default function BookSlotScreen() {
           {group.map((slot) => {
             const isSelected = selectedSlot?.startTime === slot.startTime;
             const isUnavailable = !slot.available;
+            const isSoftLocked = slot.softLocked && !isSelected;
             return (
               <TouchableOpacity
                 key={slot.startTime}
                 style={[
                   styles.slotPill,
                   isUnavailable && styles.slotPillUnavailable,
+                  isSoftLocked && styles.slotPillSoftLocked,
                   isSelected && styles.slotPillActive,
                 ]}
-                disabled={isUnavailable}
-                onPress={() => setSelectedSlot(slot)}
+                disabled={isUnavailable || (locking && !isSelected)}
+                onPress={() => handleSelectSlot(slot)}
                 activeOpacity={0.7}
               >
-                {isSelected && (
+                {isSelected && !locking && (
                   <Feather
                     name="check-circle"
                     size={12}
@@ -201,10 +262,22 @@ export default function BookSlotScreen() {
                     style={{ marginRight: 5 }}
                   />
                 )}
+                {isSelected && locking ? (
+                  <ActivityIndicator size="small" color="#FFF" style={{ marginRight: 5 }} />
+                ) : null}
+                {isSoftLocked && (
+                  <Feather
+                    name="clock"
+                    size={11}
+                    color="#D97706"
+                    style={{ marginRight: 4 }}
+                  />
+                )}
                 <Text
                   style={[
                     styles.slotPillText,
                     isUnavailable && styles.slotPillTextUnavailable,
+                    isSoftLocked && styles.slotPillTextSoftLocked,
                     isSelected && styles.slotPillTextActive,
                   ]}
                 >
@@ -565,6 +638,7 @@ const styles = StyleSheet.create({
     borderColor: "#EDE9FF",
   },
   slotPillUnavailable: { backgroundColor: "#F9FAFB", borderColor: "#F3F4F6" },
+  slotPillSoftLocked: { backgroundColor: "#FFFBEB", borderColor: "#FCD34D", borderStyle: "dashed" },
   slotPillActive: {
     backgroundColor: "#9d0399",
     borderColor: "#9d0399",
@@ -576,6 +650,7 @@ const styles = StyleSheet.create({
   },
   slotPillText: { fontSize: 13, fontWeight: "600", color: "#1A1A2E" },
   slotPillTextUnavailable: { color: "#C4C4C4" },
+  slotPillTextSoftLocked: { color: "#92400E" },
   slotPillTextActive: { color: "#FFF" },
 
   bottomBar: {

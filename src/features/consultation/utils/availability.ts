@@ -84,21 +84,26 @@ export function upcomingDays(count: number, now = new Date()): string[] {
 
 export type DayGroup = { date: string; windows: AvailabilityWindow[] };
 
-/** Sirf aage ke (abhi tak khatam na hue) active slots, din-wise grouped + sorted */
+/** Sirf aage ke (abhi tak khatam na hue) active specific_open slots, din-wise grouped + sorted */
 export function groupUpcoming(windows: AvailabilityWindow[], now = new Date()): DayGroup[] {
   const today = toApiDate(now);
   const nowTime = toApiTime(now);
   const map = new Map<string, AvailabilityWindow[]>();
   for (const w of windows) {
     if (!w.isActive) continue;
-    const upcoming = w.date > today || (w.date === today && w.endTime.slice(0, 5) > nowTime);
+    if (w.windowType === 'specific_blocked') continue; // blocked rows dashboard mein nahi dikhte
+    const endT = w.endTime ?? '23:59';
+    const upcoming = w.date > today || (w.date === today && endT.slice(0, 5) > nowTime);
     if (!upcoming) continue;
     if (!map.has(w.date)) map.set(w.date, []);
     map.get(w.date)!.push(w);
   }
   return [...map.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, ws]) => ({ date, windows: ws.sort((a, b) => a.startTime.localeCompare(b.startTime)) }));
+    .map(([date, ws]) => ({
+      date,
+      windows: ws.sort((a, b) => (a.startTime ?? '').localeCompare(b.startTime ?? '')),
+    }));
 }
 
 export const TIME_PRESETS = [
@@ -124,10 +129,15 @@ export function validateSlot(
   }
   for (const date of [...dates].sort()) {
     const clash = existing.find(
-      (w) => w.isActive && w.date === date && rangesOverlap(start, end, w.startTime, w.endTime),
+      (w) =>
+        w.isActive &&
+        w.date === date &&
+        w.startTime != null &&
+        w.endTime != null &&
+        rangesOverlap(start, end, w.startTime, w.endTime),
     );
     if (clash) {
-      return `${dayTitle(date, now)} ko ${displayTime(clash.startTime)} – ${displayTime(clash.endTime)} ka slot pehle se hai`;
+      return `${dayTitle(date, now)} ko ${displayTime(clash.startTime ?? "")} – ${displayTime(clash.endTime ?? "")} ka slot pehle se hai`;
     }
   }
   return null;

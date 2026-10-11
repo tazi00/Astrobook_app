@@ -3,8 +3,8 @@ import type {
   Comment,
   CreatePostPayload,
   ImageKitAuthToken,
-  UpdatePostPayload,
   Post,
+  UpdatePostPayload,
 } from "../types/post.types";
 
 class PostsService {

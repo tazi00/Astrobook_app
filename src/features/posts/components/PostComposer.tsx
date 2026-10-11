@@ -8,7 +8,7 @@ import { useUser } from "@/features/auth/store/auth.store";
 import { useCategories } from "@/features/categories/hooks/useCategories";
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -27,14 +27,17 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   BG_COLORS,
   MAX_CONTENT,
+  MAX_CUSTOM_TAGS,
   MAX_TAGS,
   STICKER_BG_COLORS,
+  STICKER_PACKS,
   STICKER_TEXT_COLORS,
   TEXT_COLORS,
 } from "../constants";
 import { useKeyboardHeight } from "../hooks/useKeyboardHeight";
 import { usePostComposer } from "../hooks/usePostComposer";
 import type { Post } from "../types/post.types";
+import { prettyTag } from "../utils/tags";
 import ColorSwatches from "./ColorSwatches";
 import PostHero from "./PostHero";
 
@@ -112,6 +115,7 @@ export default function PostComposer({
   const me = useUser();
   const c = usePostComposer(onClose, editing);
   const { categories, fetchCategories } = useCategories();
+  const [activePack, setActivePack] = useState(0);
 
   useEffect(() => {
     if (visible && categories.length === 0) fetchCategories();
@@ -190,6 +194,19 @@ export default function PostComposer({
         {c.uploading ? (
           <View style={styles.progressTrack}>
             <View style={[styles.progressFill, { width: `${Math.max(6, c.progress)}%` }]} />
+          </View>
+        ) : null}
+
+        {/* ── Video compression overlay ── */}
+        {c.compressing ? (
+          <View style={styles.compressOverlay}>
+            <ActivityIndicator size="large" color={AstroColors.onBrand} />
+            <Text style={styles.compressTitle}>Video compress ho raha hai…</Text>
+            <Text style={styles.compressHint}>720p quality pe optimize kar rahe hain</Text>
+            <View style={styles.compressTrack}>
+              <View style={[styles.compressFill, { width: `${c.compressProgress}%` }]} />
+            </View>
+            <Text style={styles.compressPct}>{c.compressProgress}%</Text>
           </View>
         ) : null}
 
@@ -341,12 +358,58 @@ export default function PostComposer({
                 <>
                   <TextInput
                     style={styles.stickerInput}
-                    placeholder="Sticker text…"
+                    placeholder="Sticker text likho ya neeche se chuno…"
                     placeholderTextColor={AstroColors.textMuted}
                     value={c.stickerText}
                     onChangeText={c.setStickerText}
                     maxLength={60}
                   />
+
+                  {/* ── Sticker Pack Picker ── */}
+                  <View style={styles.packSection}>
+                    {/* Pack tab row */}
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.packTabRow}
+                    >
+                      {STICKER_PACKS.map((pack, i) => (
+                        <TouchableOpacity
+                          key={pack.label}
+                          onPress={() => setActivePack(i)}
+                          style={[styles.packTab, activePack === i && styles.packTabOn]}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[styles.packTabText, activePack === i && styles.packTabTextOn]}>
+                            {pack.label}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+
+                    {/* Sticker grid */}
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.stickerGrid}
+                      key={activePack} // grid scroll reset on tab switch
+                    >
+                      {STICKER_PACKS[activePack]?.stickers.map((s) => (
+                        <TouchableOpacity
+                          key={s}
+                          style={[
+                            styles.stickerChip,
+                            c.stickerText === s && styles.stickerChipOn,
+                          ]}
+                          onPress={() => c.setStickerText(s)}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.stickerChipText}>{s}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+
                   <ColorSwatches
                     label="Sticker background"
                     colors={STICKER_BG_COLORS}
@@ -390,6 +453,68 @@ export default function PostComposer({
               })}
             </View>
           </View>
+
+          {/* ── Custom Tags — sirf create mode mein ── */}
+          {!editing ? (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>
+                Apne Tags{" "}
+                <Text style={styles.sectionHint}>
+                  ({c.customTags.length}/{MAX_CUSTOM_TAGS}) · optional
+                </Text>
+              </Text>
+              <Text style={styles.sectionSubHint}>
+                #kundli, #vastu jaisa apna tag likho aur Add karo
+              </Text>
+
+              {/* Input row */}
+              <View style={styles.customTagRow}>
+                <TextInput
+                  style={styles.customTagInput}
+                  placeholder="apna-tag-likho"
+                  placeholderTextColor={AstroColors.textMuted}
+                  value={c.customTagInput}
+                  onChangeText={c.setCustomTagInput}
+                  onSubmitEditing={c.addCustomTag}
+                  returnKeyType="done"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  maxLength={30}
+                  editable={c.customTags.length < MAX_CUSTOM_TAGS}
+                />
+                <TouchableOpacity
+                  style={[
+                    styles.addTagBtn,
+                    (!c.customTagInput.trim() || c.customTags.length >= MAX_CUSTOM_TAGS) &&
+                      styles.addTagBtnOff,
+                  ]}
+                  onPress={c.addCustomTag}
+                  disabled={!c.customTagInput.trim() || c.customTags.length >= MAX_CUSTOM_TAGS}
+                  accessibilityLabel="Tag add karo"
+                >
+                  <Feather name="plus" size={16} color={AstroColors.onBrand} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Added custom tag chips */}
+              {c.customTags.length > 0 ? (
+                <View style={styles.chips}>
+                  {c.customTags.map((tag) => (
+                    <TouchableOpacity
+                      key={tag}
+                      style={styles.customChip}
+                      onPress={() => c.removeCustomTag(tag)}
+                      activeOpacity={0.8}
+                      accessibilityLabel={`${tag} hatao`}
+                    >
+                      <Text style={styles.customChipText}>#{prettyTag(tag)}</Text>
+                      <Feather name="x" size={12} color={AstroColors.brand} style={{ marginLeft: 4 }} />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ) : null}
+            </View>
+          ) : null}
         </ScrollView>
       </View>
     </Modal>
@@ -543,6 +668,41 @@ const styles = StyleSheet.create({
     ...AstroType.body,
     color: AstroColors.text,
   },
+
+  // Sticker packs
+  packSection: { gap: 8 },
+  packTabRow: { gap: 6, paddingBottom: 2 },
+  packTab: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: AstroRadius.pill,
+    borderWidth: 1,
+    borderColor: AstroColors.border,
+    backgroundColor: AstroColors.canvas,
+  },
+  packTabOn: {
+    backgroundColor: AstroColors.brandTint,
+    borderColor: AstroColors.brand,
+  },
+  packTabText: { fontSize: 12, fontWeight: "600", color: AstroColors.textSecondary },
+  packTabTextOn: { color: AstroColors.brand },
+  stickerGrid: { gap: 6, paddingVertical: 4 },
+  stickerChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: AstroRadius.md,
+    backgroundColor: AstroColors.canvas,
+    borderWidth: 1,
+    borderColor: AstroColors.border,
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 44,
+  },
+  stickerChipOn: {
+    backgroundColor: AstroColors.brandTint,
+    borderColor: AstroColors.brand,
+  },
+  stickerChipText: { fontSize: 20 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: {
     paddingHorizontal: 14,
@@ -555,4 +715,64 @@ const styles = StyleSheet.create({
   chipOn: { backgroundColor: AstroColors.brand, borderColor: AstroColors.brand },
   chipText: { ...AstroType.caption, fontWeight: "700", color: AstroColors.ink },
   chipTextOn: { color: AstroColors.onBrand },
+
+  // Custom tags
+  sectionSubHint: { ...AstroType.micro, color: AstroColors.textMuted, marginTop: -6 },
+  customTagRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  customTagInput: {
+    flex: 1,
+    minHeight: MIN_TOUCH,
+    paddingHorizontal: 14,
+    borderRadius: AstroRadius.md,
+    backgroundColor: AstroColors.canvas,
+    borderWidth: 1,
+    borderColor: AstroColors.border,
+    ...AstroType.body,
+    color: AstroColors.text,
+  },
+  addTagBtn: {
+    width: MIN_TOUCH,
+    height: MIN_TOUCH,
+    borderRadius: AstroRadius.pill,
+    backgroundColor: AstroColors.brand,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  addTagBtnOff: { backgroundColor: AstroColors.offline },
+  customChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: AstroRadius.pill,
+    borderWidth: 1.5,
+    borderColor: AstroColors.brand,
+    backgroundColor: AstroColors.brandTint,
+  },
+  customChipText: { ...AstroType.caption, fontWeight: "700", color: AstroColors.brand },
+
+  // Compression overlay — poore screen ke upar full modal jaisa
+  compressOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(10,0,20,0.82)",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 14,
+    zIndex: 999,
+    padding: 32,
+  },
+  compressTitle: { ...AstroType.heading, color: AstroColors.onBrand, textAlign: "center" },
+  compressHint: { ...AstroType.caption, color: "rgba(255,255,255,0.65)", textAlign: "center" },
+  compressTrack: {
+    width: "80%",
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "rgba(255,255,255,0.2)",
+  },
+  compressFill: { height: 4, borderRadius: 2, backgroundColor: AstroColors.brand },
+  compressPct: { ...AstroType.caption, color: AstroColors.onBrand, fontWeight: "700" },
 });

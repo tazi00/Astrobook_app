@@ -12,6 +12,7 @@ type RequestOptions = {
   withToken?: boolean; // default: true
   params?: Record<string, any>;
   headers?: Record<string, string>;
+  data?: any; // DELETE request body ke liye (axios config.data)
 };
 
 /**
@@ -146,9 +147,10 @@ class ApiClient {
   // ── Private: Build Config ──────────────────────────────────
 
   private _buildConfig(options: RequestOptions = {}): AxiosRequestConfig {
-    const { withToken = true, params, headers = {} } = options;
+    const { withToken = true, params, headers = {}, data } = options;
     return {
       params,
+      ...(data !== undefined && { data }),
       headers: {
         ...headers,
         // Internal flag — request interceptor padh ke token attach karega

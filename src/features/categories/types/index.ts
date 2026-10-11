@@ -6,11 +6,19 @@ export type CategoryFilter = {
 export type Category = {
   id: string;
   label: string;
-  // Ab UI mein use nahi hota (Explore ab emoji nahi dikhata); page headers
-  // abhi bhi kar sakte hain
   emoji: string;
-  // Optional background photo — na ho to card generated art dikhata hai
-  imageUrl?: string | null;
   color: string;
   filter: string;
+  // Hero media — admin upload karta hai; null = koi video/image nahi
+  heroVideoUrl?: string | null;
+  heroImageUrl?: string | null;
+  // Legacy — ab use nahi hota
+  imageUrl?: string | null;
+};
+
+export type CategoryStats = {
+  categoryId: string;
+  postCount: number;
+  interestedUserCount: number;
+  sampleAvatars: string[];
 };

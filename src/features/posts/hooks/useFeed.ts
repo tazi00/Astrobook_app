@@ -4,7 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import { postsService } from "../services/posts.service";
 import type { Post } from "../types/post.types";
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 5;
 
 // Backend ab `posts` query mein hi astrologerName/astrologerAvatar (users
 // join) aur basicServiceId (correlated subquery) sab bhej deta hai — pehle

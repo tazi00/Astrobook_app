@@ -72,10 +72,15 @@ export default function ExploreScreen() {
   const displayed =
     showAll || searching ? filtered : filtered.slice(0, INITIAL_COUNT);
 
-  const open = (id: string, label: string) =>
+  const open = (id: string, label: string, heroVideoUrl?: string | null) =>
     router.push({
       pathname: "/(user)/explore/[category]" as any,
-      params: { category: id, label },
+      params: {
+        category: id,
+        label,
+        // heroVideoUrl ko query param se paas karo — category page video play karega
+        ...(heroVideoUrl ? { heroVideoUrl } : {}),
+      },
     });
 
   return (
@@ -169,7 +174,7 @@ export default function ExploreScreen() {
                 category={cat}
                 width={CARD_WIDTH}
                 height={CARD_HEIGHT}
-                onPress={() => open(cat.id, cat.label)}
+                onPress={() => open(cat.id, cat.label, cat.heroVideoUrl)}
               />
             ))}
           </View>

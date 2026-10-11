@@ -8,10 +8,12 @@ import type {
   ConsultationService as ConsultationServiceType,
   ConsultationServiceVariant,
   CreateAvailabilityPayload,
+  CreateRecurringAvailabilityPayload,
   CreateServicePayload,
   GetSlotsQuery,
   GroupedAppointments,
   InitiateBookingPayload,
+  RecurringAvailability,
   ScheduleResponse,
   TimeSlot,
   UpdateServicePayload,
@@ -99,6 +101,33 @@ class ConsultationServiceApi {
     await apiClient.delete(`${this.base}/availability/${id}`);
   }
 
+  // ── Astrologer: Recurring Availability ──────────────────────────────────
+
+  /**
+   * Ek saath multiple days set karo (Mon/Wed/Fri chips se).
+   * Backend Promise.allSettled use karta hai — {created, failed} milta hai.
+   */
+  async setRecurringAvailability(
+    dto: CreateRecurringAvailabilityPayload,
+  ): Promise<{ created: number; failed: number }> {
+    const res = await apiClient.post<{ created: number; failed: number }>(
+      `${this.base}/availability/recurring`,
+      dto,
+    );
+    return res.data;
+  }
+
+  async getMyRecurringAvailability(): Promise<RecurringAvailability[]> {
+    const res = await apiClient.get<{ recurring: RecurringAvailability[] }>(
+      `${this.base}/availability/recurring/mine`,
+    );
+    return res.data.recurring;
+  }
+
+  async deleteRecurringAvailability(id: string): Promise<void> {
+    await apiClient.delete(`${this.base}/availability/recurring/${id}`);
+  }
+
   // ── Astrologer: Schedule ─────────────────────────────────────────────────
 
   async getSchedule(date?: string): Promise<ScheduleResponse> {
@@ -133,6 +162,39 @@ class ConsultationServiceApi {
       { params: query },
     );
     return res.data.slots;
+  }
+
+  // ── Slot Locks (soft lock — Book My Show style) ──────────────────────────
+
+  /**
+   * Slot ko 10 min ke liye soft-lock karo. Returns null agar kisi aur ne
+   * already lock kar rakha hai (user ko retry message dikhao).
+   */
+  async lockSlot(astrologerId: string, slotStart: string): Promise<boolean> {
+    try {
+      await apiClient.post(`${this.base}/slots/lock`, { astrologerId, slotStart });
+      return true;
+    } catch {
+      return false; // conflict — kisi aur ka lock hai
+    }
+  }
+
+  async releaseSlot(astrologerId: string, slotStart: string): Promise<void> {
+    try {
+      await apiClient.delete(`${this.base}/slots/lock`, {
+        data: { astrologerId, slotStart },
+      });
+    } catch {
+      // Best-effort — agar request fail ho toh TTL expire hone pe auto-release
+    }
+  }
+
+  async releaseAllLocks(): Promise<void> {
+    try {
+      await apiClient.delete(`${this.base}/slots/lock/all`);
+    } catch {
+      // Best-effort
+    }
   }
 
   // Explore category detail page — kisi bhi astrologer ki us tag wali services
