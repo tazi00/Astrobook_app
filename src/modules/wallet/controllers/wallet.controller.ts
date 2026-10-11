@@ -1,0 +1,38 @@
+import type { FastifyRequest, FastifyReply } from 'fastify'
+import type { WalletService } from '../services/wallet.service'
+
+export class WalletController {
+  constructor(private readonly walletService: WalletService) {}
+
+  getBalance = async (request: FastifyRequest, reply: FastifyReply) => {
+    const { userId } = request.user as { userId: string }
+    const wallet = await this.walletService.getBalance(userId)
+    return reply.status(200).send({ success: true, data: wallet })
+  }
+
+  getTransactions = async (request: FastifyRequest, reply: FastifyReply) => {
+    const { userId } = request.user as { userId: string }
+    const transactions = await this.walletService.getTransactions(userId)
+    return reply.status(200).send({ success: true, data: { transactions } })
+  }
+
+  getPendingCancellations = async (request: FastifyRequest, reply: FastifyReply) => {
+    const { userId } = request.user as { userId: string }
+    const requests = await this.walletService.getPendingCancellations(userId)
+    return reply.status(200).send({ success: true, data: { requests } })
+  }
+
+  claimCancellation = async (
+    request: FastifyRequest<{
+      Params: { requestId: string }
+      Body: { action: 'refund' | 'wallet' }
+    }>,
+    reply: FastifyReply,
+  ) => {
+    const { userId } = request.user as { userId: string }
+    const { requestId } = request.params
+    const { action } = request.body
+    const result = await this.walletService.claimCancellation(requestId, userId, action)
+    return reply.status(200).send({ success: true, data: { request: result } })
+  }
+}
