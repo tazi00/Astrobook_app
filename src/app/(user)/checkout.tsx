@@ -3,7 +3,7 @@ import { useAstrologerProfile } from "@/features/astrologer/hooks/useAstrologerP
 import { useUser } from "@/features/auth/store/auth.store";
 import { consultationService } from "@/features/consultation/service";
 import type { ConsultationServiceVariant } from "@/features/consultation/types";
-import { paymentService } from "@/features/payment/service";
+import { paymentService, walletPayService } from "@/features/payment/service";
 import {
   classifyPaymentFailure,
   copyForKind,
@@ -16,6 +16,7 @@ import {
   ActivityIndicator,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TouchableOpacity,
   View,
@@ -80,6 +81,24 @@ export default function CheckoutScreen() {
     string | null
   >(null);
 
+  // ── Wallet ──────────────────────────────────────────────────────────────────
+  const [walletBalance, setWalletBalance] = useState<number>(0);
+  const [useWallet, setUseWallet] = useState(false);
+
+  useEffect(() => {
+    walletPayService
+      .getBalance()
+      .then((b) => setWalletBalance(Number(b.balance)))
+      .catch(() => {}); // silent — checkout bina wallet ke bhi kaam karega
+  }, []);
+
+  const totalPrice = Number(variant?.price ?? service?.price ?? 0);
+  // Wallet se kitna cover hoga — balance >= price → full; otherwise partial
+  const walletApplied = useWallet ? Math.min(walletBalance, totalPrice) : 0;
+  const razorpayAmount = totalPrice - walletApplied;
+  // Sirf tab toggle dikhao jab wallet mein kuch ho
+  const showWalletOption = walletBalance > 0;
+
   const scheduledDate = scheduledAt ? new Date(scheduledAt) : null;
 
   const handlePayment = async () => {
@@ -106,11 +125,27 @@ export default function CheckoutScreen() {
         setPendingAppointmentId(appointmentId);
       }
 
-      // Step 2: Razorpay order banao
+      // ── Full Wallet Pay ─────────────────────────────────────────────────────
+      // Agar wallet se poora amount cover ho raha hai — Razorpay ki zarurat nahi
+      if (useWallet && razorpayAmount <= 0) {
+        stage = "verify"; // wallet pay = direct confirm, no gateway
+        await walletPayService.payWithWallet(appointmentId);
+        router.replace({
+          pathname: "/(user)/booking-confirmation" as any,
+          params: { appointmentId },
+        });
+        return;
+      }
+
+      // ── Razorpay Pay (full or partial after wallet deduction) ───────────────
       stage = "order";
       const order = await paymentService.createOrder(appointmentId);
 
-      // Step 3: Razorpay checkout kholo
+      // Partial wallet apply: Razorpay amount = remaining (razorpayAmount),
+      // lekin order Razorpay ne totalPrice se banaya hai. Partial wallet ka
+      // UI sirf indication ke liye hai — backend partial flow alag nahi karta
+      // is MVP mein (full Razorpay order hi jaata hai). Sirf full wallet pay
+      // mein Razorpay skip hota hai.
       stage = "gateway";
       const result = await RazorpayCheckout.open({
         key: process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID!,
@@ -264,6 +299,55 @@ export default function CheckoutScreen() {
           </View>
         </View>
 
+        {/* --- WALLET OPTION CARD --- */}
+        {showWalletOption && (
+          <View style={styles.walletCard}>
+            <View style={styles.walletRow}>
+              <View style={styles.walletLeft}>
+                <Text style={styles.walletIcon}>⚡</Text>
+                <View>
+                  <Text style={styles.walletTitle}>AstroBook Wallet</Text>
+                  <Text style={styles.walletBalance}>
+                    ₹{walletBalance.toFixed(2)} available
+                  </Text>
+                </View>
+              </View>
+              <Switch
+                value={useWallet}
+                onValueChange={setUseWallet}
+                trackColor={{ false: "#D1D5DB", true: "#C084FC" }}
+                thumbColor={useWallet ? "#9d0399" : "#9CA3AF"}
+              />
+            </View>
+
+            {useWallet && (
+              <View style={styles.walletBreakdown}>
+                <View style={styles.walletBreakdownRow}>
+                  <Text style={styles.walletBreakdownLabel}>Wallet covers</Text>
+                  <Text style={styles.walletBreakdownCredit}>
+                    − ₹{walletApplied.toFixed(2)}
+                  </Text>
+                </View>
+                {razorpayAmount > 0 ? (
+                  <View style={styles.walletBreakdownRow}>
+                    <Text style={styles.walletBreakdownLabel}>
+                      Remaining via Razorpay
+                    </Text>
+                    <Text style={styles.walletBreakdownRemainder}>
+                      ₹{razorpayAmount.toFixed(2)}
+                    </Text>
+                  </View>
+                ) : (
+                  <Text style={styles.walletFullCoverNote}>
+                    ✅ Wallet se poora amount cover ho raha hai — Razorpay
+                    nahi lagega
+                  </Text>
+                )}
+              </View>
+            )}
+          </View>
+        )}
+
         {/* --- CANCELLATION POLICY --- */}
         <View style={styles.policyCard}>
           <View style={styles.policyHeaderRow}>
@@ -290,7 +374,11 @@ export default function CheckoutScreen() {
             <ActivityIndicator size="small" color="#FFF" />
           ) : (
             <Text style={styles.paymentBtnText}>
-              Pay Now • ₹{variant?.price ?? service.price ?? "—"}
+              {useWallet && razorpayAmount <= 0
+                ? `Pay with Wallet • ₹${totalPrice.toFixed(2)}`
+                : useWallet && razorpayAmount > 0
+                  ? `Pay via Razorpay • ₹${razorpayAmount.toFixed(2)}`
+                  : `Pay Now • ₹${variant?.price ?? service.price ?? "—"}`}
             </Text>
           )}
         </TouchableOpacity>
@@ -390,6 +478,50 @@ const styles = StyleSheet.create({
     borderTopColor: "#EDE9FF",
     elevation: 10,
   },
+  // ── Wallet card ────────────────────────────────────────────────────────────
+  walletCard: {
+    backgroundColor: "#FFF",
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1.5,
+    borderColor: "#C084FC",
+    elevation: 2,
+    shadowColor: "#9d0399",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    gap: 12,
+  },
+  walletRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  walletLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
+  walletIcon: { fontSize: 26 },
+  walletTitle: { fontSize: 14, fontWeight: "700", color: "#1F2937" },
+  walletBalance: { fontSize: 12, color: "#7C3AED", fontWeight: "600", marginTop: 2 },
+  walletBreakdown: {
+    backgroundColor: "#F5F0FF",
+    borderRadius: 10,
+    padding: 10,
+    gap: 6,
+  },
+  walletBreakdownRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  walletBreakdownLabel: { fontSize: 12, color: "#6B7280" },
+  walletBreakdownCredit: { fontSize: 13, fontWeight: "700", color: "#16A34A" },
+  walletBreakdownRemainder: { fontSize: 13, fontWeight: "700", color: "#9d0399" },
+  walletFullCoverNote: {
+    fontSize: 12,
+    color: "#15803D",
+    fontWeight: "600",
+    textAlign: "center",
+  },
+
   paymentBtn: {
     backgroundColor: "#9d0399",
     borderRadius: 12,

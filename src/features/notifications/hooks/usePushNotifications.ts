@@ -66,6 +66,10 @@ function getDeepLinkForNotification(data: Record<string, any>): string | null {
     case "booking_cancelled":
     case "payment_failed":
       return "/(user)/my-bookings";
+    case "astrologer_cancelled_choice":
+    case "user_cancelled_choice":
+      // User ko wallet screen pe bhejo — wahan CancellationChoiceSheet khulta hai
+      return "/(user)/wallet";
     default:
       return null;
   }

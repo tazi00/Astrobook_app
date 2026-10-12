@@ -4,9 +4,10 @@ import { useAstrologerApplicationStatus } from "@/features/astrologer-applicatio
 import { AstrologerProfileView } from "@/features/astrologer/components/AstrologerProfileView";
 import { useLogout } from "@/features/auth/hooks/useAuth";
 import { useAuthStore, useUser } from "@/features/auth/store/auth.store";
+import { usePendingCancellations } from "@/features/wallet/hooks/useWallet";
 import { useMyProfile } from "@/features/users/hooks/useProfile";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import ApplicationStatusCard from "../components/ApplicationStatusCard";
 import LogoutButton from "../components/LogoutButton";
@@ -37,6 +38,20 @@ export default function ProfileScreen() {
   const user = profile ?? sessionUser;
   const { stats, fetchCounts } = useProfileStats(sessionUser?.id, user?.name, "user");
 
+  // Pending cancellation choices — "My Bookings" pe badge dikhane ke liye
+  const { requests: pendingCancellations, refetch: refetchPendingCancellations } =
+    usePendingCancellations();
+
+  // USER_MENU mein "My Bookings" ke paas badge inject karo
+  const menuWithBadges = useMemo(() => {
+    const pendingCount = pendingCancellations.length;
+    return USER_MENU.map((item) =>
+      item.route === "/(user)/my-bookings" && pendingCount > 0
+        ? { ...item, badge: pendingCount }
+        : item,
+    );
+  }, [pendingCancellations.length]);
+
   // Pull-to-refresh: admin ne approve kiya ho to bina restart pata chal jaye.
   // isAstrologer/role Zustand me hai, isliye fresh profile store me bhi sync karte hain.
   const onRefresh = async () => {
@@ -46,6 +61,7 @@ export default function ProfileScreen() {
         fetchProfile(),
         refetchApplicationStatus(),
         fetchCounts(),
+        refetchPendingCancellations(),
       ]);
       if (profileResult?.data) {
         updateUser({
@@ -123,7 +139,7 @@ export default function ProfileScreen() {
           </>
         ) : null}
 
-        <ProfileMenu items={USER_MENU} onNavigate={(r) => router.push(r as any)} />
+        <ProfileMenu items={menuWithBadges} onNavigate={(r) => router.push(r as any)} />
         <LogoutButton loading={loggingOut} onPress={onLogout} />
       </ScrollView>
     </View>

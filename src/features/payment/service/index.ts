@@ -76,3 +76,42 @@ class PaymentServiceApi {
 }
 
 export const paymentService = new PaymentServiceApi();
+
+// ── Wallet Pay (separate base path) ─────────────────────────────────────────
+
+export type WalletPayResponse = {
+  message: string;
+  appointment: {
+    id: string;
+    status: string;
+    agoraChannel: string | null;
+    agoraToken: string | null;
+    [key: string]: any;
+  };
+};
+
+class WalletPayServiceApi {
+  private readonly base = "/wallet";
+
+  // apiClient.get<T>() returns ApiResponse<T> = { success, data: T, message? }
+  // wallet controller: reply.send({ success: true, data: { balance, currency } })
+  // so res.data = { balance, currency }
+  async getBalance(): Promise<{ balance: string; currency: string }> {
+    const res = await apiClient.get<{ balance: string; currency: string }>(
+      `${this.base}/balance`,
+    );
+    return res.data;
+  }
+
+  // wallet/pay controller: reply.send({ success: true, data: { message, appointment } })
+  // so res.data = { message, appointment }
+  async payWithWallet(appointmentId: string): Promise<WalletPayResponse> {
+    const res = await apiClient.post<WalletPayResponse>(
+      `${this.base}/pay`,
+      { appointmentId },
+    );
+    return res.data;
+  }
+}
+
+export const walletPayService = new WalletPayServiceApi();

@@ -31,6 +31,13 @@ class WalletServiceApi {
   async claimCancellation(requestId: string, action: ClaimAction): Promise<void> {
     await apiClient.post(`${this.base}/cancellation-requests/${requestId}/claim`, { action })
   }
+
+  // Reschedule appointment — same astrologer, same service, new slot
+  async rescheduleAppointment(appointmentId: string, newScheduledAt: string): Promise<void> {
+    await apiClient.patch(`/consultation/appointments/${appointmentId}/reschedule`, {
+      newScheduledAt,
+    })
+  }
 }
 
 export const walletService = new WalletServiceApi()
