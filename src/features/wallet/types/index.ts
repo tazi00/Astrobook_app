@@ -12,19 +12,30 @@ export type WalletTransaction = {
   createdAt: string
 }
 
+export type CancellationRequestStatus =
+  | 'pending'
+  | 'refunded'
+  | 'credited'
+  | 'timing_changed'
+  | 'admin_pending_money'
+  | 'admin_pending_wallet'
+  | 'admin_approved'
+  | 'admin_rejected'
+
 export type CancellationRequest = {
   id: string
   appointmentId: string
   amount: string
-  razorpayPaymentId: string
-  status: 'pending' | 'refunded' | 'credited' | 'timing_changed'
-  // Kisne cancel kiya — 'astrologer' → 2 options; 'user' → 3 options (incl. timing change)
+  deductionAmount: string  // '0' or '50'
+  upiId?: string | null
+  razorpayPaymentId?: string | null
+  status: CancellationRequestStatus
+  // Kisne cancel kiya — 'astrologer' → 2 options; 'user' → same 2 options
   initiatedBy: 'astrologer' | 'user'
   expiresAt: string
   createdAt: string
   appointment?: {
     scheduledAt: string
-    // Slot picker ke liye — getAvailableDates() + getSlots() calls
     astrologerId: string
     serviceId: string
     // Optional display-only fields (filled if API joins extra tables)

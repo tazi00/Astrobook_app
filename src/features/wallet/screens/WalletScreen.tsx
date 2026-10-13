@@ -1,20 +1,16 @@
 import Header from '@/components/header'
 import { AstroColors, AstroRadius, AstroSpacing } from '@/constants/astro-theme'
 import { Feather } from '@expo/vector-icons'
-import { useState } from 'react'
 import {
   ActivityIndicator,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import CancellationChoiceSheet from '../components/CancellationChoiceSheet'
-import { usePendingCancellations, useWalletBalance, useWalletTransactions } from '../hooks/useWallet'
-import type { CancellationRequest } from '../types'
+import { useWalletBalance, useWalletTransactions } from '../hooks/useWallet'
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -28,18 +24,10 @@ function formatDate(iso: string) {
 
 function sourceLabel(source: string): string {
   switch (source) {
-    case 'cancellation_refund': return 'Session Cancelled'
+    case 'cancellation_refund': return 'Session Cancelled — Refund'
     case 'booking_payment': return 'Booking Payment'
     default: return 'AstroBook Credit'
   }
-}
-
-function formatCountdown(expiresAt: string): string {
-  const diff = new Date(expiresAt).getTime() - Date.now()
-  if (diff <= 0) return 'Expired'
-  const h = Math.floor(diff / 3_600_000)
-  const m = Math.floor((diff % 3_600_000) / 60_000)
-  return h > 0 ? `${h}h ${m}m baaki` : `${m} min baaki`
 }
 
 // ─── Balance Card ─────────────────────────────────────────────────────────────
@@ -59,30 +47,6 @@ function BalanceCard({ balance, loading }: { balance: string; loading: boolean }
         Wallet credits sirf AstroBook bookings mein use ho sakte hain
       </Text>
     </View>
-  )
-}
-
-// ─── Pending Cancellation Banner ──────────────────────────────────────────────
-function PendingBanner({
-  request,
-  onPress,
-}: {
-  request: CancellationRequest
-  onPress: () => void
-}) {
-  return (
-    <TouchableOpacity style={styles.pendingBanner} onPress={onPress} activeOpacity={0.8}>
-      <View style={styles.pendingLeft}>
-        <Feather name="alert-circle" size={16} color={AstroColors.gold} />
-        <View>
-          <Text style={styles.pendingTitle}>Cancelled session — choice karo</Text>
-          <Text style={styles.pendingAmount}>
-            ₹{parseFloat(request.amount).toFixed(0)} · {formatCountdown(request.expiresAt)}
-          </Text>
-        </View>
-      </View>
-      <Feather name="chevron-right" size={16} color={AstroColors.gold} />
-    </TouchableOpacity>
   )
 }
 
@@ -114,18 +78,9 @@ export default function WalletScreen() {
   const insets = useSafeAreaInsets()
   const { balance, loading: balLoading, refetch: refetchBal } = useWalletBalance()
   const { transactions, loading: txLoading, refreshing, refetch } = useWalletTransactions()
-  const { requests, refetch: refetchReqs } = usePendingCancellations()
-
-  const [sheetRequest, setSheetRequest] = useState<CancellationRequest | null>(null)
 
   const onRefresh = async () => {
-    await Promise.all([refetch(true), refetchBal(), refetchReqs()])
-  }
-
-  const onClaimed = () => {
-    refetchBal()
-    refetchReqs()
-    refetch()
+    await Promise.all([refetch(true), refetchBal()])
   }
 
   return (
@@ -145,16 +100,6 @@ export default function WalletScreen() {
       >
         <BalanceCard balance={balance?.balance ?? '0'} loading={balLoading} />
 
-        {/* Pending cancellations */}
-        {requests.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Action Required</Text>
-            {requests.map((req) => (
-              <PendingBanner key={req.id} request={req} onPress={() => setSheetRequest(req)} />
-            ))}
-          </View>
-        )}
-
         {/* Transaction history */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Transaction History</Text>
@@ -170,13 +115,6 @@ export default function WalletScreen() {
           )}
         </View>
       </ScrollView>
-
-      <CancellationChoiceSheet
-        visible={!!sheetRequest}
-        onClose={() => setSheetRequest(null)}
-        request={sheetRequest}
-        onClaimed={onClaimed}
-      />
     </View>
   )
 }
@@ -213,34 +151,6 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.6)',
     marginTop: 4,
     lineHeight: 16,
-  },
-
-  // Pending banner
-  pendingBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: AstroColors.goldTint,
-    borderRadius: AstroRadius.md,
-    padding: AstroSpacing.md,
-    borderWidth: 1,
-    borderColor: AstroColors.goldBorder,
-  },
-  pendingLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: AstroSpacing.sm,
-    flex: 1,
-  },
-  pendingTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: AstroColors.ink,
-  },
-  pendingAmount: {
-    fontSize: 12,
-    color: AstroColors.textSecondary,
-    marginTop: 2,
   },
 
   // Section

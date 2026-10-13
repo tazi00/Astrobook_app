@@ -1,6 +1,8 @@
 import Header from "@/components/header";
 import { consultationService } from "@/features/consultation/service";
 import type { AppointmentWithChildren } from "@/features/consultation/types";
+import { walletService } from "@/features/wallet/service";
+import type { CancellationRequest } from "@/features/wallet/types";
 import { Feather } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
@@ -10,6 +12,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -68,6 +71,225 @@ const STATUS_META: Record<
   },
 };
 
+// ─── Refund Section ───────────────────────────────────────────────────────────
+function RefundSection({
+  appointmentId,
+  onClaimed,
+}: {
+  appointmentId: string;
+  onClaimed?: () => void;
+}) {
+  const [cancellation, setCancellation] = useState<CancellationRequest | null | undefined>(
+    undefined, // undefined = still loading
+  );
+  const [upiInput, setUpiInput] = useState("");
+  const [showUpiField, setShowUpiField] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    walletService
+      .getCancellationByAppointment(appointmentId)
+      .then(setCancellation)
+      .catch(() => setCancellation(null));
+  }, [appointmentId]);
+
+  // Loading
+  if (cancellation === undefined) {
+    return (
+      <View style={rs.loadingRow}>
+        <ActivityIndicator size="small" color="#9d0399" />
+      </View>
+    );
+  }
+
+  // No refund request at all — cancelled without a refund (e.g. user cancel, no policy)
+  if (!cancellation) return null;
+
+  const net = parseFloat(cancellation.amount) - parseFloat(cancellation.deductionAmount ?? "0");
+  const netStr = net.toFixed(0);
+
+  const handleClaim = async (action: "wallet" | "refund") => {
+    if (action === "refund" && !showUpiField) {
+      setShowUpiField(true);
+      return;
+    }
+    if (action === "refund" && !upiInput.trim()) {
+      setError("UPI ID daalo pehle");
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      await walletService.claimCancellation(
+        cancellation.id,
+        action,
+        action === "refund" ? upiInput.trim() : undefined,
+      );
+      // Re-fetch to show new status
+      const updated = await walletService.getCancellationByAppointment(appointmentId);
+      setCancellation(updated);
+      setShowUpiField(false);
+      onClaimed?.();
+    } catch (e: any) {
+      setError(e?.response?.data?.message ?? "Kuch galat ho gaya — dobara try karo");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // ── Pending — show choice ──────────────────────────────────────────────────
+  if (cancellation.status === "pending") {
+    return (
+      <View style={rs.card}>
+        <View style={rs.headerRow}>
+          <View style={[rs.dot, { backgroundColor: "#F59E0B" }]} />
+          <Text style={rs.cardTitle}>Refund Available</Text>
+          <Text style={rs.amount}>₹{netStr}</Text>
+        </View>
+        <Text style={rs.subtitle}>
+          Apni choice karo — wallet credit ya UPI pe paise
+        </Text>
+
+        {error ? <Text style={rs.errorText}>{error}</Text> : null}
+
+        {/* UPI input (shown after tapping UPI button) */}
+        {showUpiField && (
+          <View style={rs.upiWrap}>
+            <TextInput
+              style={rs.upiInput}
+              placeholder="UPI ID daalo (e.g. name@upi)"
+              placeholderTextColor="#9CA3AF"
+              value={upiInput}
+              onChangeText={setUpiInput}
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
+          </View>
+        )}
+
+        <View style={rs.btnRow}>
+          {/* Wallet */}
+          <TouchableOpacity
+            style={[rs.btn, rs.btnPrimary, submitting && rs.btnDisabled]}
+            onPress={() => handleClaim("wallet")}
+            disabled={submitting}
+            activeOpacity={0.8}
+          >
+            {submitting && !showUpiField ? (
+              <ActivityIndicator size="small" color="#FFF" />
+            ) : (
+              <>
+                <Feather name="zap" size={14} color="#FFF" />
+                <Text style={rs.btnPrimaryText}>Wallet mein lo</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          {/* UPI */}
+          <TouchableOpacity
+            style={[rs.btn, rs.btnSecondary, submitting && rs.btnDisabled]}
+            onPress={() => handleClaim("refund")}
+            disabled={submitting}
+            activeOpacity={0.8}
+          >
+            {submitting && showUpiField ? (
+              <ActivityIndicator size="small" color="#9d0399" />
+            ) : (
+              <>
+                <Feather name="smartphone" size={14} color="#9d0399" />
+                <Text style={rs.btnSecondaryText}>
+                  {showUpiField ? "Submit" : "UPI pe lo"}
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  // ── Admin pending money (UPI request submitted) ────────────────────────────
+  if (cancellation.status === "admin_pending_money") {
+    return (
+      <View style={[rs.card, rs.cardAmber]}>
+        <View style={rs.headerRow}>
+          <Feather name="clock" size={15} color="#B45309" />
+          <Text style={[rs.cardTitle, { color: "#B45309" }]}>UPI Refund Pending</Text>
+        </View>
+        <Text style={rs.subtitleAmber}>
+          ₹{netStr} tumhare UPI
+          {cancellation.upiId ? ` (${cancellation.upiId})` : ""} pe 2 din mein aa jaayega.
+        </Text>
+      </View>
+    );
+  }
+
+  // ── Admin pending wallet (wallet credit queued) ────────────────────────────
+  if (cancellation.status === "admin_pending_wallet") {
+    return (
+      <View style={[rs.card, rs.cardAmber]}>
+        <View style={rs.headerRow}>
+          <Feather name="clock" size={15} color="#B45309" />
+          <Text style={[rs.cardTitle, { color: "#B45309" }]}>Wallet Credit Pending</Text>
+        </View>
+        <Text style={rs.subtitleAmber}>
+          ₹{netStr} ka wallet credit request admin ke paas hai — jald hi aa jaayega.
+        </Text>
+      </View>
+    );
+  }
+
+  // ── Credited ───────────────────────────────────────────────────────────────
+  if (cancellation.status === "credited") {
+    return (
+      <View style={[rs.card, rs.cardGreen]}>
+        <View style={rs.headerRow}>
+          <Feather name="check-circle" size={15} color="#15803D" />
+          <Text style={[rs.cardTitle, { color: "#15803D" }]}>Wallet Credit Ho Gaya ✓</Text>
+        </View>
+        <Text style={rs.subtitleGreen}>
+          ₹{netStr} tumhare AstroBook wallet mein aa gaya.
+        </Text>
+      </View>
+    );
+  }
+
+  // ── Refunded ───────────────────────────────────────────────────────────────
+  if (cancellation.status === "refunded") {
+    return (
+      <View style={[rs.card, rs.cardGreen]}>
+        <View style={rs.headerRow}>
+          <Feather name="check-circle" size={15} color="#15803D" />
+          <Text style={[rs.cardTitle, { color: "#15803D" }]}>Refund Ho Gaya ✓</Text>
+        </View>
+        <Text style={rs.subtitleGreen}>
+          ₹{netStr} UPI pe bhej diya gaya hai.
+          {cancellation.upiId ? ` (${cancellation.upiId})` : ""}
+        </Text>
+      </View>
+    );
+  }
+
+  // ── Admin rejected ─────────────────────────────────────────────────────────
+  if (cancellation.status === "admin_rejected") {
+    return (
+      <View style={[rs.card, rs.cardRed]}>
+        <View style={rs.headerRow}>
+          <Feather name="x-circle" size={15} color="#DC2626" />
+          <Text style={[rs.cardTitle, { color: "#DC2626" }]}>Request Reject Ho Gayi</Text>
+        </View>
+        <Text style={rs.subtitleRed}>
+          Zyada jankari ke liye support se contact karo.
+        </Text>
+      </View>
+    );
+  }
+
+  return null;
+}
+
+// ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function BookingConfirmationScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -79,7 +301,7 @@ export default function BookingConfirmationScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadAppointment = () => {
     if (!appointmentId) return;
     setLoading(true);
     setError(null);
@@ -92,7 +314,9 @@ export default function BookingConfirmationScreen() {
         ),
       )
       .finally(() => setLoading(false));
-  }, [appointmentId]);
+  };
+
+  useEffect(() => { loadAppointment(); }, [appointmentId]);
 
   if (loading) {
     return (
@@ -214,6 +438,14 @@ export default function BookingConfirmationScreen() {
           </View>
         </View>
 
+        {/* --- REFUND SECTION (only for cancelled bookings) --- */}
+        {appointment.status === "cancelled" && (
+          <RefundSection
+            appointmentId={appointment.id}
+            onClaimed={loadAppointment}
+          />
+        )}
+
         <View style={{ height: 20 }} />
       </ScrollView>
 
@@ -251,6 +483,133 @@ export default function BookingConfirmationScreen() {
   );
 }
 
+// ─── Refund Section Styles ────────────────────────────────────────────────────
+const rs = StyleSheet.create({
+  loadingRow: {
+    paddingVertical: 16,
+    alignItems: "center",
+  },
+  card: {
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#EDE9FF",
+    backgroundColor: "#FFF",
+    gap: 10,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+  },
+  cardAmber: {
+    backgroundColor: "#FFFBEB",
+    borderColor: "#FDE68A",
+  },
+  cardGreen: {
+    backgroundColor: "#F0FDF4",
+    borderColor: "#BBF7D0",
+  },
+  cardRed: {
+    backgroundColor: "#FEF2F2",
+    borderColor: "#FECACA",
+  },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  cardTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#1F2937",
+    flex: 1,
+  },
+  amount: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#9d0399",
+  },
+  subtitle: {
+    fontSize: 12,
+    color: "#6B7280",
+    lineHeight: 18,
+  },
+  subtitleAmber: {
+    fontSize: 12,
+    color: "#92400E",
+    lineHeight: 18,
+  },
+  subtitleGreen: {
+    fontSize: 12,
+    color: "#166534",
+    lineHeight: 18,
+  },
+  subtitleRed: {
+    fontSize: 12,
+    color: "#991B1B",
+    lineHeight: 18,
+  },
+  errorText: {
+    fontSize: 12,
+    color: "#DC2626",
+  },
+  upiWrap: {
+    marginTop: 2,
+  },
+  upiInput: {
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 13,
+    color: "#1F2937",
+    backgroundColor: "#F9FAFB",
+  },
+  btnRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 2,
+  },
+  btn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    borderRadius: 10,
+    paddingVertical: 12,
+  },
+  btnPrimary: {
+    backgroundColor: "#9d0399",
+  },
+  btnSecondary: {
+    borderWidth: 1.5,
+    borderColor: "#9d0399",
+    backgroundColor: "#FFF",
+  },
+  btnDisabled: {
+    opacity: 0.6,
+  },
+  btnPrimaryText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#FFF",
+  },
+  btnSecondaryText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#9d0399",
+  },
+});
+
+// ─── Main Screen Styles ───────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#F9F5FF" },
   centerFill: { alignItems: "center", justifyContent: "center", gap: 12 },

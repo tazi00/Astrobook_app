@@ -28,8 +28,19 @@ class WalletServiceApi {
     return res.data.requests
   }
 
-  async claimCancellation(requestId: string, action: ClaimAction): Promise<void> {
-    await apiClient.post(`${this.base}/cancellation-requests/${requestId}/claim`, { action })
+  // Booking detail page ke liye — kisi bhi status ki cancellation fetch karo
+  async getCancellationByAppointment(appointmentId: string): Promise<CancellationRequest | null> {
+    const res = await apiClient.get<{ cancellation: CancellationRequest | null }>(
+      `${this.base}/cancellation-request/by-appointment/${appointmentId}`,
+    )
+    return res.data.cancellation
+  }
+
+  async claimCancellation(requestId: string, action: ClaimAction, upiId?: string): Promise<void> {
+    await apiClient.post(`${this.base}/cancellation-requests/${requestId}/claim`, {
+      action,
+      ...(upiId ? { upiId } : {}),
+    })
   }
 
   // Reschedule appointment — same astrologer, same service, new slot

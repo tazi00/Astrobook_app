@@ -1,16 +1,15 @@
 import AppBottomSheet from '@/components/AppBottomSheet'
 import { toast } from '@/components/toast'
 import { AstroColors, AstroRadius, AstroSpacing } from '@/constants/astro-theme'
-import { consultationService } from '@/features/consultation/service'
-import type { TimeSlot } from '@/features/consultation/types'
 import { Feather } from '@expo/vector-icons'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import {
   ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native'
 import { walletService } from '../service'
@@ -21,13 +20,16 @@ import type { CancellationRequest, ClaimAction } from '../types'
 //
 // Jab session cancel ho aur user ne abhi tak choose nahi kiya.
 //
-// initiatedBy === 'astrologer' → 2 options  (refund | wallet)
-// initiatedBy === 'user'       → 3 options  (refund | wallet | change timing)
+// 2 options (chahe astrologer cancel kare ya user):
+//   1. Wallet Credit — admin approve karega, phir instant credit
+//   2. Money Refund  — UPI ID dalo, admin manually transfer karega (2 din)
 //
-// "Change Timing" flow: date pick → slot pick → confirm reschedule
+// Agar deductionAmount > 0 (user ne 10 min ke baad cancel kiya):
+//   - ₹50 processing fee dikhao
+//   - Net refund = amount - 50
 // ─────────────────────────────────────────────────────────────────────────────
 
-type Step = 'choice' | 'date' | 'slots' | 'confirm'
+type Step = 'choice' | 'upi_input'
 
 function formatCountdown(expiresAt: string): string {
   const diff = new Date(expiresAt).getTime() - Date.now()
@@ -49,20 +51,6 @@ function formatDate(iso: string) {
   })
 }
 
-function formatDateLabel(dateStr: string) {
-  // dateStr is 'YYYY-MM-DD'
-  const d = new Date(`${dateStr}T00:00:00`)
-  return d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })
-}
-
-function formatSlotTime(iso: string) {
-  return new Date(iso).toLocaleTimeString('en-IN', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  })
-}
-
 type Props = {
   visible: boolean
   onClose: () => void
@@ -77,164 +65,75 @@ export default function CancellationChoiceSheet({
   onClaimed,
 }: Props) {
   const isUserCancel = request?.initiatedBy === 'user'
+  const deduction = parseFloat(request?.deductionAmount ?? '0')
+  const totalAmount = parseFloat(request?.amount ?? '0')
+  const netAmount = Math.max(0, totalAmount - deduction)
 
   const [step, setStep] = useState<Step>('choice')
+  const [upiId, setUpiId] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  // Date-picker state
-  const [dates, setDates] = useState<string[]>([])
-  const [datesLoading, setDatesLoading] = useState(false)
-  const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const resetSheet = () => {
+    setStep('choice')
+    setUpiId('')
+    setSubmitting(false)
+  }
 
-  // Slot-picker state
-  const [slots, setSlots] = useState<TimeSlot[]>([])
-  const [slotsLoading, setSlotsLoading] = useState(false)
-  const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null)
+  const handleClose = () => {
+    resetSheet()
+    onClose()
+  }
 
-  // Reset everything when sheet opens/closes
-  useEffect(() => {
-    if (!visible) {
-      setStep('choice')
-      setDates([])
-      setSelectedDate(null)
-      setSlots([])
-      setSelectedSlot(null)
-    }
-  }, [visible])
+  // ── Claim ─────────────────────────────────────────────────────────────────
 
-  // ── Claim (refund or wallet) ──────────────────────────────────────────────
-
-  const claim = async (action: ClaimAction) => {
+  const claim = async (action: ClaimAction, upiIdValue?: string) => {
     if (!request) return
     setSubmitting(true)
     try {
-      await walletService.claimCancellation(request.id, action)
-      toast(
+      await walletService.claimCancellation(request.id, action, upiIdValue)
+      toast.show(
         action === 'refund'
-          ? 'Refund shuru ho gaya — 5-7 working days mein aayega'
-          : 'Amount wallet mein credit ho gaya!',
+          ? '2 din mein UPI pe aa jaayega — request submit ho gayi'
+          : 'Request submit ho gayi — admin approve karte hi wallet mein aa jaayega',
       )
       onClaimed()
-      onClose()
+      handleClose()
     } catch {
-      toast('Kuch gadbad hui, dobara try karo')
+      toast.show('Kuch gadbad hui, dobara try karo')
     } finally {
       setSubmitting(false)
     }
   }
 
-  // ── Change Timing — step 1 → 2 ────────────────────────────────────────────
-
-  const openDatePicker = async () => {
-    const astrologerId = request?.appointment?.astrologerId
-    if (!astrologerId) {
-      toast('Appointment details nahi mile — try again')
+  const handleMoneyRefundSubmit = () => {
+    const trimmed = upiId.trim()
+    if (!trimmed) {
+      toast.show('UPI ID daalo')
       return
     }
-    setDatesLoading(true)
-    setStep('date')
-    try {
-      const data = await consultationService.getAvailableDates(astrologerId)
-      // Filter past dates
-      const today = new Date().toISOString().slice(0, 10)
-      setDates(data.filter((d) => d >= today))
-    } catch {
-      toast('Dates fetch nahi hui — dobara try karo')
-      setStep('choice')
-    } finally {
-      setDatesLoading(false)
+    // Basic UPI format check: something@something
+    if (!trimmed.includes('@')) {
+      toast.show('Valid UPI ID daalo (e.g. name@upi)')
+      return
     }
+    claim('refund', trimmed)
   }
 
-  // ── Date selected → step 3 ────────────────────────────────────────────────
-
-  const onDateSelect = async (date: string) => {
-    const astrologerId = request?.appointment?.astrologerId
-    const serviceId = request?.appointment?.serviceId
-    if (!astrologerId || !serviceId) return
-
-    setSelectedDate(date)
-    setSlotsLoading(true)
-    setStep('slots')
-    setSlots([])
-    setSelectedSlot(null)
-
-    try {
-      const data = await consultationService.getSlots({ astrologerId, serviceId, date })
-      setSlots(data)
-    } catch {
-      toast('Slots fetch nahi hui — dobara try karo')
-      setStep('date')
-    } finally {
-      setSlotsLoading(false)
-    }
-  }
-
-  // ── Slot selected → step 4 ────────────────────────────────────────────────
-
-  const onSlotSelect = (slot: TimeSlot) => {
-    setSelectedSlot(slot)
-    setStep('confirm')
-  }
-
-  // ── Confirm reschedule ────────────────────────────────────────────────────
-
-  const confirmReschedule = async () => {
-    if (!request || !selectedSlot) return
-    setSubmitting(true)
-    try {
-      await walletService.rescheduleAppointment(
-        request.appointmentId,
-        selectedSlot.startTime,
-      )
-      toast('Session reschedule ho gaya!')
-      onClaimed()
-      onClose()
-    } catch (err: any) {
-      const msg: string = err?.response?.data?.message ?? ''
-      if (msg.includes('week')) toast('Is hafte ek baar hi reschedule ho sakta hai')
-      else if (msg.includes('month')) toast('Is mahine 2 baar reschedule ho chuka hai')
-      else if (msg.includes('already rescheduled')) toast('Ye booking pehle reschedule ho chuki hai')
-      else if (msg.includes('conflict')) toast('Ye slot already book hai, dusra chuno')
-      else toast('Reschedule nahi hua — dobara try karo')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  // ── Height based on step ──────────────────────────────────────────────────
-
-  const heightRatio =
-    step === 'choice' ? (isUserCancel ? 0.72 : 0.62)
-    : step === 'date'    ? 0.60
-    : step === 'slots'   ? 0.72
-    : 0.52 // confirm
-
-  // ── Titles ───────────────────────────────────────────────────────────────
-
-  const sheetTitle =
-    step === 'choice'
-      ? isUserCancel ? 'Aapne Session Cancel Kiya' : 'Session Cancel Ho Gayi'
-      : step === 'date'
-      ? 'Naya Din Chuno'
-      : step === 'slots'
-      ? 'Slot Chuno'
-      : 'Reschedule Confirm Karo'
-
-  // ── Render ────────────────────────────────────────────────────────────────
+  const title = isUserCancel ? 'Aapne Session Cancel Kiya' : 'Session Cancel Ho Gayi'
 
   return (
     <AppBottomSheet
       visible={visible}
-      onClose={onClose}
-      title={sheetTitle}
-      heightRatio={heightRatio}
+      onClose={handleClose}
+      title={step === 'upi_input' ? 'UPI ID Daalo' : title}
+      heightRatio={0.65}
     >
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
-        {/* ── STEP: CHOICE ─────────────────────────────────────────────── */}
+        {/* ── Step 1: Choice ─────────────────────────────────────────────── */}
         {step === 'choice' && (
           <>
             {/* Info strip */}
@@ -257,12 +156,27 @@ export default function CancellationChoiceSheet({
               </View>
             </View>
 
+            {/* Deduction info */}
+            {deduction > 0 && (
+              <View style={styles.deductionCard}>
+                <Feather name="info" size={14} color={AstroColors.textSecondary} />
+                <Text style={styles.deductionText}>
+                  ₹{deduction.toFixed(0)} processing fee kategi (10 min ke baad cancel kiya)
+                </Text>
+              </View>
+            )}
+
             {/* Amount */}
             <View style={styles.amountRow}>
-              <Text style={styles.amountLabel}>Refund amount</Text>
-              <Text style={styles.amountValue}>
-                ₹{parseFloat(request?.amount ?? '0').toFixed(0)}
-              </Text>
+              <View>
+                <Text style={styles.amountLabel}>Refund amount</Text>
+                {deduction > 0 && (
+                  <Text style={styles.amountOriginal}>
+                    ₹{totalAmount.toFixed(0)} − ₹{deduction.toFixed(0)} fee
+                  </Text>
+                )}
+              </View>
+              <Text style={styles.amountValue}>₹{netAmount.toFixed(0)}</Text>
             </View>
 
             {/* Countdown */}
@@ -277,7 +191,11 @@ export default function CancellationChoiceSheet({
 
             {/* Option: Wallet credit */}
             <Pressable
-              style={({ pressed }) => [styles.optionCard, styles.optionWallet, pressed && styles.pressed]}
+              style={({ pressed }) => [
+                styles.optionCard,
+                styles.optionWallet,
+                pressed && styles.pressed,
+              ]}
               onPress={() => claim('wallet')}
               disabled={submitting}
             >
@@ -287,18 +205,20 @@ export default function CancellationChoiceSheet({
               <View style={styles.optionBody}>
                 <Text style={styles.optionTitle}>AstroBook Wallet</Text>
                 <Text style={styles.optionDesc}>
-                  Turant credit — agli booking mein seedha use karo
+                  Admin approve karte hi credit — agli booking mein seedha use karo
                 </Text>
               </View>
-              {submitting
-                ? <ActivityIndicator size="small" color={AstroColors.brand} />
-                : <Feather name="chevron-right" size={18} color={AstroColors.brand} />}
+              {submitting ? (
+                <ActivityIndicator size="small" color={AstroColors.brand} />
+              ) : (
+                <Feather name="chevron-right" size={18} color={AstroColors.brand} />
+              )}
             </Pressable>
 
-            {/* Option: Original refund */}
+            {/* Option: Money refund */}
             <Pressable
               style={({ pressed }) => [styles.optionCard, pressed && styles.pressed]}
-              onPress={() => claim('refund')}
+              onPress={() => setStep('upi_input')}
               disabled={submitting}
             >
               <View style={styles.optionIconWrap}>
@@ -306,189 +226,73 @@ export default function CancellationChoiceSheet({
               </View>
               <View style={styles.optionBody}>
                 <Text style={styles.optionTitle}>Original Payment Pe Refund</Text>
-                <Text style={styles.optionDesc}>5–7 working days mein bank/UPI mein aayega</Text>
+                <Text style={styles.optionDesc}>2 din mein UPI / bank mein aayega</Text>
               </View>
-              {submitting
-                ? <ActivityIndicator size="small" color={AstroColors.textSecondary} />
-                : <Feather name="chevron-right" size={18} color={AstroColors.textSecondary} />}
+              {submitting ? (
+                <ActivityIndicator size="small" color={AstroColors.textSecondary} />
+              ) : (
+                <Feather name="chevron-right" size={18} color={AstroColors.textSecondary} />
+              )}
             </Pressable>
 
-            {/* Option: Change timing — only for user-cancel + appointment meta available */}
-            {isUserCancel && request?.appointment?.astrologerId ? (
-              <Pressable
-                style={({ pressed }) => [styles.optionCard, styles.optionReschedule, pressed && styles.pressed]}
-                onPress={openDatePicker}
-                disabled={submitting}
-              >
-                <View style={styles.optionIconWrap}>
-                  <Feather name="calendar" size={22} color={AstroColors.successDark} />
-                </View>
-                <View style={styles.optionBody}>
-                  <Text style={styles.optionTitle}>Timing Badlo</Text>
-                  <Text style={styles.optionDesc}>
-                    Same astrologer, same service — naya slot chuno, koi extra charge nahi
-                  </Text>
-                </View>
-                <Feather name="chevron-right" size={18} color={AstroColors.successDark} />
-              </Pressable>
-            ) : null}
-
             <Text style={styles.autoNote}>
-              24 ghante mein koi choice nahi kiya toh automatic refund ho jaata hai.
+              1 din mein koi choice nahi kiya toh automatic money refund request ho jaati hai.
             </Text>
           </>
         )}
 
-        {/* ── STEP: DATE PICKER ────────────────────────────────────────── */}
-        {step === 'date' && (
+        {/* ── Step 2: UPI input ──────────────────────────────────────────── */}
+        {step === 'upi_input' && (
           <>
-            <Text style={styles.stepHint}>
-              Kaunsa din chahiye? (Same astrologer ke available dates)
-            </Text>
-            {datesLoading ? (
-              <ActivityIndicator color={AstroColors.brand} style={{ marginTop: 24 }} />
-            ) : dates.length === 0 ? (
-              <View style={styles.emptyWrap}>
-                <Feather name="calendar" size={32} color={AstroColors.border} />
-                <Text style={styles.emptyText}>
-                  Abhi koi available date nahi — baad mein try karo
-                </Text>
-                <Pressable
-                  style={[styles.backBtn, { marginTop: AstroSpacing.md }]}
-                  onPress={() => setStep('choice')}
-                >
-                  <Text style={styles.backBtnText}>Wapas Jao</Text>
-                </Pressable>
-              </View>
-            ) : (
-              <>
-                {dates.map((date) => (
-                  <Pressable
-                    key={date}
-                    style={({ pressed }) => [
-                      styles.dateRow,
-                      selectedDate === date && styles.dateRowSelected,
-                      pressed && styles.pressed,
-                    ]}
-                    onPress={() => onDateSelect(date)}
-                  >
-                    <Feather
-                      name="calendar"
-                      size={16}
-                      color={selectedDate === date ? AstroColors.brand : AstroColors.textSecondary}
-                    />
-                    <Text
-                      style={[
-                        styles.dateLabel,
-                        selectedDate === date && styles.dateLabelSelected,
-                      ]}
-                    >
-                      {formatDateLabel(date)}
-                    </Text>
-                    <Feather
-                      name="chevron-right"
-                      size={16}
-                      color={selectedDate === date ? AstroColors.brand : AstroColors.border}
-                    />
-                  </Pressable>
-                ))}
-                <Pressable style={styles.backBtn} onPress={() => setStep('choice')}>
-                  <Text style={styles.backBtnText}>← Wapas</Text>
-                </Pressable>
-              </>
-            )}
-          </>
-        )}
-
-        {/* ── STEP: SLOT PICKER ────────────────────────────────────────── */}
-        {step === 'slots' && (
-          <>
-            <Text style={styles.stepHint}>
-              {selectedDate ? formatDateLabel(selectedDate) : ''} ke available slots:
-            </Text>
-            {slotsLoading ? (
-              <ActivityIndicator color={AstroColors.brand} style={{ marginTop: 24 }} />
-            ) : slots.filter((s) => s.available).length === 0 ? (
-              <View style={styles.emptyWrap}>
-                <Feather name="clock" size={32} color={AstroColors.border} />
-                <Text style={styles.emptyText}>
-                  Is din koi slot available nahi — dusra din chuno
-                </Text>
-                <Pressable
-                  style={[styles.backBtn, { marginTop: AstroSpacing.md }]}
-                  onPress={() => setStep('date')}
-                >
-                  <Text style={styles.backBtnText}>← Aur Dates Dekho</Text>
-                </Pressable>
-              </View>
-            ) : (
-              <>
-                <View style={styles.slotsGrid}>
-                  {slots.filter((s) => s.available).map((slot) => (
-                    <Pressable
-                      key={slot.startTime}
-                      style={({ pressed }) => [
-                        styles.slotChip,
-                        slot.softLocked && styles.slotChipSoftLocked,
-                        selectedSlot?.startTime === slot.startTime && styles.slotChipSelected,
-                        pressed && styles.pressed,
-                      ]}
-                      onPress={() => onSlotSelect(slot)}
-                    >
-                      <Text
-                        style={[
-                          styles.slotText,
-                          slot.softLocked && styles.slotTextMuted,
-                          selectedSlot?.startTime === slot.startTime && styles.slotTextSelected,
-                        ]}
-                      >
-                        {formatSlotTime(slot.startTime)}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-                <Pressable style={styles.backBtn} onPress={() => setStep('date')}>
-                  <Text style={styles.backBtnText}>← Aur Dates Dekho</Text>
-                </Pressable>
-              </>
-            )}
-          </>
-        )}
-
-        {/* ── STEP: CONFIRM ────────────────────────────────────────────── */}
-        {step === 'confirm' && selectedSlot && (
-          <>
-            <View style={styles.confirmCard}>
-              <Feather name="check-circle" size={36} color={AstroColors.success} />
-              <Text style={styles.confirmTitle}>Naya Slot</Text>
-              <Text style={styles.confirmSlot}>
-                {selectedDate ? formatDateLabel(selectedDate) : ''}
-              </Text>
-              <Text style={styles.confirmTime}>
-                {formatSlotTime(selectedSlot.startTime)}
-              </Text>
-              <Text style={styles.confirmNote}>
-                Same astrologer · same service · same price
+            <View style={styles.upiInfoCard}>
+              <Feather name="info" size={16} color={AstroColors.brand} />
+              <Text style={styles.upiInfoText}>
+                Admin aapke UPI par manually{' '}
+                <Text style={{ fontWeight: '700' }}>₹{netAmount.toFixed(0)}</Text> transfer
+                karega — usually 2 din ke andar.
               </Text>
             </View>
 
-            <Pressable
-              style={({ pressed }) => [
-                styles.confirmBtn,
-                submitting && styles.confirmBtnDisabled,
-                pressed && !submitting && styles.pressed,
-              ]}
-              onPress={confirmReschedule}
-              disabled={submitting}
-            >
-              {submitting
-                ? <ActivityIndicator size="small" color="#fff" />
-                : <Text style={styles.confirmBtnText}>Confirm Reschedule</Text>}
-            </Pressable>
+            <Text style={styles.inputLabel}>UPI ID</Text>
+            <TextInput
+              style={styles.textInput}
+              placeholder="name@upi / number@bank"
+              placeholderTextColor={AstroColors.textMuted}
+              value={upiId}
+              onChangeText={setUpiId}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="email-address"
+            />
+            <Text style={styles.inputHint}>
+              e.g. 9876543210@paytm, yourname@oksbi
+            </Text>
 
-            <Pressable style={styles.backBtn} onPress={() => setStep('slots')}>
-              <Text style={styles.backBtnText}>← Aur Slots Dekho</Text>
-            </Pressable>
+            <View style={styles.upiActions}>
+              <Pressable
+                style={({ pressed }) => [styles.btnSecondary, pressed && styles.pressed]}
+                onPress={() => setStep('choice')}
+                disabled={submitting}
+              >
+                <Text style={styles.btnSecondaryText}>Wapas Jao</Text>
+              </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.btnPrimary,
+                  pressed && styles.pressed,
+                  submitting && styles.btnDisabled,
+                ]}
+                onPress={handleMoneyRefundSubmit}
+                disabled={submitting}
+              >
+                {submitting ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.btnPrimaryText}>Submit Karo</Text>
+                )}
+              </Pressable>
+            </View>
           </>
         )}
       </ScrollView>
@@ -500,7 +304,7 @@ const styles = StyleSheet.create({
   content: {
     padding: AstroSpacing.lg,
     gap: AstroSpacing.md,
-    paddingBottom: 32,
+    paddingBottom: 40,
   },
 
   // ── Info card ─────────────────────────────────────────────────────────────
@@ -525,6 +329,24 @@ const styles = StyleSheet.create({
     color: AstroColors.textSecondary,
   },
 
+  // ── Deduction notice ──────────────────────────────────────────────────────
+  deductionCard: {
+    flexDirection: 'row',
+    gap: AstroSpacing.xs,
+    alignItems: 'center',
+    backgroundColor: AstroColors.surface,
+    borderRadius: AstroRadius.sm,
+    padding: AstroSpacing.sm,
+    borderWidth: 1,
+    borderColor: AstroColors.border,
+  },
+  deductionText: {
+    flex: 1,
+    fontSize: 12,
+    color: AstroColors.textSecondary,
+    lineHeight: 17,
+  },
+
   // ── Amount ────────────────────────────────────────────────────────────────
   amountRow: {
     flexDirection: 'row',
@@ -537,6 +359,11 @@ const styles = StyleSheet.create({
   amountLabel: {
     fontSize: 14,
     color: AstroColors.textSecondary,
+  },
+  amountOriginal: {
+    fontSize: 11,
+    color: AstroColors.textMuted,
+    marginTop: 2,
   },
   amountValue: {
     fontSize: 22,
@@ -580,10 +407,6 @@ const styles = StyleSheet.create({
     borderColor: AstroColors.brand,
     backgroundColor: AstroColors.brandTint,
   },
-  optionReschedule: {
-    borderColor: AstroColors.success,
-    backgroundColor: AstroColors.successTint,
-  },
   pressed: { opacity: 0.75 },
   optionIconWrap: {
     width: 44,
@@ -614,146 +437,80 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
 
-  // ── Step hint ─────────────────────────────────────────────────────────────
-  stepHint: {
-    fontSize: 13,
-    color: AstroColors.textSecondary,
-    marginBottom: AstroSpacing.xs,
-  },
-
-  // ── Date rows ─────────────────────────────────────────────────────────────
-  dateRow: {
+  // ── UPI input step ────────────────────────────────────────────────────────
+  upiInfoCard: {
     flexDirection: 'row',
-    alignItems: 'center',
     gap: AstroSpacing.sm,
-    backgroundColor: AstroColors.surface,
+    alignItems: 'flex-start',
+    backgroundColor: AstroColors.brandTint,
     borderRadius: AstroRadius.md,
     padding: AstroSpacing.md,
     borderWidth: 1,
-    borderColor: AstroColors.border,
-  },
-  dateRowSelected: {
     borderColor: AstroColors.brand,
-    backgroundColor: AstroColors.brandTint,
   },
-  dateLabel: {
+  upiInfoText: {
     flex: 1,
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 13,
     color: AstroColors.ink,
+    lineHeight: 19,
   },
-  dateLabelSelected: {
-    color: AstroColors.brand,
+  inputLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: AstroColors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: AstroSpacing.xs,
   },
-
-  // ── Slot grid ─────────────────────────────────────────────────────────────
-  slotsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: AstroSpacing.sm,
-  },
-  slotChip: {
+  textInput: {
+    backgroundColor: AstroColors.surface,
+    borderRadius: AstroRadius.md,
+    borderWidth: 1,
+    borderColor: AstroColors.border,
     paddingHorizontal: AstroSpacing.md,
     paddingVertical: AstroSpacing.sm,
-    borderRadius: AstroRadius.sm,
-    backgroundColor: AstroColors.surface,
-    borderWidth: 1,
-    borderColor: AstroColors.border,
-    minWidth: 90,
-    alignItems: 'center',
-  },
-  slotChipSelected: {
-    backgroundColor: AstroColors.brandTint,
-    borderColor: AstroColors.brand,
-  },
-  slotChipSoftLocked: {
-    opacity: 0.45,
-  },
-  slotText: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 15,
     color: AstroColors.ink,
   },
-  slotTextSelected: {
-    color: AstroColors.brand,
-  },
-  slotTextMuted: {
-    color: AstroColors.textMuted,
-  },
-
-  // ── Confirm step ──────────────────────────────────────────────────────────
-  confirmCard: {
-    alignItems: 'center',
-    gap: AstroSpacing.xs,
-    paddingVertical: AstroSpacing.lg,
-    backgroundColor: AstroColors.surface,
-    borderRadius: AstroRadius.lg,
-    borderWidth: 1,
-    borderColor: AstroColors.border,
-  },
-  confirmTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: AstroColors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    marginTop: AstroSpacing.sm,
-  },
-  confirmSlot: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: AstroColors.ink,
-    marginTop: 2,
-  },
-  confirmTime: {
-    fontSize: 28,
-    fontWeight: '900',
-    color: AstroColors.ink,
-  },
-  confirmNote: {
+  inputHint: {
     fontSize: 11,
     color: AstroColors.textMuted,
-    marginTop: 4,
+    marginTop: -6,
+    lineHeight: 16,
   },
-  confirmBtn: {
-    backgroundColor: AstroColors.brand,
-    borderRadius: AstroRadius.md,
-    padding: AstroSpacing.md,
-    alignItems: 'center',
+  upiActions: {
+    flexDirection: 'row',
+    gap: AstroSpacing.sm,
     marginTop: AstroSpacing.xs,
   },
-  confirmBtnDisabled: {
+  btnSecondary: {
+    flex: 1,
+    borderRadius: AstroRadius.md,
+    borderWidth: 1,
+    borderColor: AstroColors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 13,
+  },
+  btnSecondaryText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: AstroColors.textSecondary,
+  },
+  btnPrimary: {
+    flex: 2,
+    borderRadius: AstroRadius.md,
+    backgroundColor: AstroColors.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 13,
+  },
+  btnDisabled: {
     opacity: 0.6,
   },
-  confirmBtnText: {
-    fontSize: 15,
-    fontWeight: '800',
+  btnPrimaryText: {
+    fontSize: 14,
+    fontWeight: '700',
     color: '#fff',
-  },
-
-  // ── Back button ───────────────────────────────────────────────────────────
-  backBtn: {
-    alignSelf: 'center',
-    paddingVertical: AstroSpacing.sm,
-    paddingHorizontal: AstroSpacing.md,
-    marginTop: AstroSpacing.xs,
-  },
-  backBtnText: {
-    fontSize: 13,
-    color: AstroColors.textSecondary,
-    fontWeight: '600',
-  },
-
-  // ── Empty state ───────────────────────────────────────────────────────────
-  emptyWrap: {
-    alignItems: 'center',
-    paddingVertical: 32,
-    gap: 8,
-  },
-  emptyText: {
-    fontSize: 13,
-    color: AstroColors.textMuted,
-    textAlign: 'center',
-    lineHeight: 18,
   },
 })
