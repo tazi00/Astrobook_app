@@ -168,24 +168,6 @@ export default function FeedScreen() {
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           extraData={[visibleVideoId, screenFocused]}
-          // Interests nudge — sirf regular users ke liye jinhone abhi tak
-          // koi interest select nahi kiya. Ek baar interests set ho jaayein
-          // toh yeh banner automatically hat jaata hai.
-          ListHeaderComponent={
-            user && !user.isAstrologer && (!user.interests || user.interests.length === 0) ? (
-              <TouchableOpacity
-                style={styles.nudge}
-                activeOpacity={0.8}
-                onPress={() => router.push("/(user)/edit-profile" as any)}
-              >
-                <Feather name="star" size={14} color={AstroColors.brand} />
-                <Text style={styles.nudgeText}>
-                  Apni pasand select karo — feed personal ho jaayegi!
-                </Text>
-                <Text style={styles.nudgeLink}>Select karo →</Text>
-              </TouchableOpacity>
-            ) : null
-          }
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -254,29 +236,5 @@ const styles = StyleSheet.create({
     textAlign: "center",
     color: AstroColors.textMuted,
     paddingVertical: 24,
-  },
-  nudge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginHorizontal: 16,
-    marginTop: 12,
-    marginBottom: 4,
-    backgroundColor: AstroColors.brandTint,
-    borderRadius: AstroRadius.md,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: AstroColors.border,
-  },
-  nudgeText: {
-    ...AstroType.caption,
-    flex: 1,
-    color: AstroColors.textSecondary,
-  },
-  nudgeLink: {
-    ...AstroType.caption,
-    color: AstroColors.brand,
-    fontWeight: "600",
   },
 });
