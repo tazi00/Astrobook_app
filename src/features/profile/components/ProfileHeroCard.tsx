@@ -8,6 +8,7 @@ import {
 } from "@/constants/astro-theme";
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 export type ProfileStat = {
@@ -29,6 +30,7 @@ export default function ProfileHeroCard({
   badge,
   stats,
   onEdit,
+  belowEditSection,
 }: {
   id?: string | null;
   name?: string | null;
@@ -40,6 +42,8 @@ export default function ProfileHeroCard({
   badge?: string;
   stats: ProfileStat[];
   onEdit: () => void;
+  /** Edit Profile button ke niche render hoga — e.g. Kundli section */
+  belowEditSection?: React.ReactNode;
 }) {
   return (
     <View style={[styles.card, AstroShadow.card]}>
@@ -110,6 +114,11 @@ export default function ProfileHeroCard({
           <Feather name="edit-2" size={15} color={AstroColors.brand} />
           <Text style={styles.editText}>Edit Profile</Text>
         </TouchableOpacity>
+
+        {/* Edit Profile ke niche — Kundli ya koi bhi custom section */}
+        {belowEditSection ? (
+          <View style={styles.belowEdit}>{belowEditSection}</View>
+        ) : null}
       </View>
     </View>
   );
@@ -188,4 +197,12 @@ const styles = StyleSheet.create({
     borderColor: AstroColors.brand,
   },
   editText: { ...AstroType.button, color: AstroColors.brand },
+  belowEdit: {
+    alignSelf: "stretch",
+    marginTop: 14,
+    // Card ke andar divider jaise separation
+    borderTopWidth: 1,
+    borderTopColor: AstroColors.border,
+    paddingTop: 14,
+  },
 });

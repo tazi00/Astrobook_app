@@ -1,6 +1,7 @@
 import { toast } from "@/components/toast";
 import { useCategories } from "@/features/categories/hooks/useCategories";
 import { useImageKitUpload } from "@/features/posts/hooks/usePosts";
+import { useCloudinaryVideoUpload } from "@/features/posts/hooks/useCloudinaryVideoUpload";
 import * as FileSystemLegacy from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
 import { useEffect, useState } from "react";
@@ -21,7 +22,9 @@ export type Step = 1 | 2;
 
 export function useBecomeAstrologerForm() {
   const { categories, loading: catLoading, error: catError, fetchCategories } = useCategories();
-  const { uploadImage, uploading, progress } = useImageKitUpload();
+  const { uploadImage, uploading: ikUploading, progress: ikProgress } = useImageKitUpload();
+  // Video Cloudinary pe jata hai — ImageKit free plan mein video bandwidth quota hoti hai
+  const { uploadVideo, uploading: videoUploading, progress: videoProgress } = useCloudinaryVideoUpload();
 
   const [done, setDone] = useState(false);
   const { submit, loading: submitting } = useSubmitAstrologerApplication(() => setDone(true));
@@ -82,6 +85,8 @@ export function useBecomeAstrologerForm() {
     }
   };
 
+  const uploading = ikUploading || videoUploading;
+  const progress = videoUploading ? videoProgress : ikProgress;
   const busy = uploading || submitting || picking;
   const isDirty =
     !!bio || !!experience || languages.length > 0 || specs.length > 0 || !!video || !!doc1 || !!doc2;
@@ -130,11 +135,12 @@ export function useBecomeAstrologerForm() {
 
   const submitAll = async () => {
     if (!step1Valid || !step2Valid || !video || !doc1 || !doc2) return;
-    const folder = "/astrobook/astrologer-applications";
+    const ts = Date.now();
+    // Video → Cloudinary (no bandwidth quota limits); docs → ImageKit
     const [videoUrl, document1Url, document2Url] = await Promise.all([
-      uploadImage(video.uri, `intro-${Date.now()}.mp4`, folder, "video/mp4"),
-      uploadImage(doc1.uri, `doc1-${Date.now()}.jpg`, folder, "image/jpeg"),
-      uploadImage(doc2.uri, `doc2-${Date.now()}.jpg`, folder, "image/jpeg"),
+      uploadVideo(video.uri, `intro-${ts}.mp4`),
+      uploadImage(doc1.uri, `doc1-${ts}.jpg`, "/astrobook/astrologer-applications", "image/jpeg"),
+      uploadImage(doc2.uri, `doc2-${ts}.jpg`, "/astrobook/astrologer-applications", "image/jpeg"),
     ]);
     if (!videoUrl || !document1Url || !document2Url) {
       toast.show("Upload nahi ho paya — internet check karke dobara try karo", "error");

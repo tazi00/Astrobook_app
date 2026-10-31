@@ -58,4 +58,8 @@ export const queryKeys = {
     ids: (itemType: string) => ["favorites", "ids", itemType] as const,
     list: (itemType: string) => ["favorites", "list", itemType] as const,
   },
+  kundli: {
+    me: ["kundli", "me"] as const,
+    public: (token: string) => ["kundli", "public", token] as const,
+  },
 };

@@ -55,6 +55,10 @@ export default function EditProfileScreen() {
   const [email, setEmail] = useState("");
   const [dob, setDob] = useState<Date | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  // Kundli birth details
+  const [birthTime, setBirthTime] = useState<Date | null>(null);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [birthPlace, setBirthPlace] = useState("");
   const [interests, setInterests] = useState<string[]>([]);
   const [bio, setBio] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
@@ -70,10 +74,16 @@ export default function EditProfileScreen() {
     name: "",
     email: "",
     dob: null as Date | null,
+    birthTime: null as Date | null,
+    birthPlace: "",
     interests: [] as string[],
     bio: "",
     avatarUrl: null as string | null,
   });
+
+  // Form sirf ONCE initialize ho — profile ya categories dubara load hone pe
+  // user ka input reset na ho (categories late load hoti hain aur reset trigger karti thi).
+  const initializedRef = useRef(false);
 
   useEffect(() => {
     fetchProfile();
@@ -81,7 +91,10 @@ export default function EditProfileScreen() {
   }, []);
 
   useEffect(() => {
+    // Pehli baar hi init karo — baad mein categories load hone pe dobara mat chalao
     if (!profile) return;
+    if (initializedRef.current) return;
+
     const filteredInterests =
       categories.length > 0
         ? (profile.interests ?? []).filter((id) =>
@@ -89,9 +102,23 @@ export default function EditProfileScreen() {
           )
         : (profile.interests ?? []);
 
+    // Agar categories abhi tak load nahi huii, interests ka wait karo
+    // lekin name/email/dob/birthTime/birthPlace abhi set karo
+    const canInitInterests = categories.length > 0;
+
     setName(profile.name ?? "");
     setEmail(profile.email ?? "");
     setDob(profile.dateOfBirth ? new Date(profile.dateOfBirth) : null);
+    // Birth time: "HH:MM:SS" string → Date object (sirf time ke liye)
+    const parsedBirthTime = (() => {
+      if (!profile.birthTime) return null;
+      const [h, m] = profile.birthTime.split(":").map(Number);
+      const d = new Date();
+      d.setHours(h ?? 0, m ?? 0, 0, 0);
+      return d;
+    })();
+    setBirthTime(parsedBirthTime);
+    setBirthPlace(profile.birthPlace ?? "");
     setInterests(filteredInterests);
     setBio(profile.bio ?? "");
     setAvatarUrl(profile.avatarUrl ?? null);
@@ -100,10 +127,17 @@ export default function EditProfileScreen() {
       name: profile.name ?? "",
       email: profile.email ?? "",
       dob: profile.dateOfBirth ? new Date(profile.dateOfBirth) : null,
+      birthTime: parsedBirthTime,
+      birthPlace: profile.birthPlace ?? "",
       interests: filteredInterests,
       bio: profile.bio ?? "",
       avatarUrl: profile.avatarUrl ?? null,
     };
+
+    // Categories bhi load ho gayi toh mark as initialized
+    if (canInitInterests) {
+      initializedRef.current = true;
+    }
   }, [profile, categories]);
 
   const toggleInterest = (id: string) => {
@@ -134,6 +168,12 @@ export default function EditProfileScreen() {
     }
   };
 
+  // Birth time → "HH:MM:SS" string
+  function toBirthTimeStr(d: Date | null): string {
+    if (!d) return "";
+    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:00`;
+  }
+
   // Dirty check — stale interest ids ko "changed" mat ginna
   const isDirty = (() => {
     const o = origRef.current;
@@ -144,6 +184,8 @@ export default function EditProfileScreen() {
     const dobStr = dob ? toApiDate(dob) : "";
     const origDobStr = o.dob ? toApiDate(o.dob) : "";
     if (dobStr !== origDobStr) return true;
+    if (toBirthTimeStr(birthTime) !== toBirthTimeStr(o.birthTime)) return true;
+    if (birthPlace.trim() !== o.birthPlace.trim()) return true;
     const sortedCurr = [...interests].sort().join(",");
     const sortedOrig = [...o.interests].sort().join(",");
     if (sortedCurr !== sortedOrig) return true;
@@ -159,6 +201,8 @@ export default function EditProfileScreen() {
       name: name.trim(),
       email: email.trim() || undefined,
       dateOfBirth: dob ? toApiDate(dob) : undefined,
+      birthTime: birthTime ? toBirthTimeStr(birthTime) : undefined,
+      birthPlace: birthPlace.trim() || undefined,
       interests,
       bio: bio.trim(),
       ...(avatarUrl && avatarUrl.startsWith("http") ? { avatarUrl } : {}),
@@ -304,6 +348,52 @@ export default function EditProfileScreen() {
                 }}
               />
             )}
+          </View>
+
+          {/* ── Birth Time ── */}
+          <View style={styles.fieldBlock}>
+            <Text style={styles.fieldLabel}>BIRTH TIME</Text>
+            <TouchableOpacity
+              style={styles.input}
+              onPress={() => setShowTimePicker(true)}
+              activeOpacity={0.7}
+            >
+              <Text style={birthTime ? styles.inputText : styles.inputPlaceholder}>
+                {birthTime
+                  ? birthTime.toLocaleTimeString("en-IN", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      hour12: true,
+                    })
+                  : "Janm ka samay chuno"}
+              </Text>
+            </TouchableOpacity>
+            {showTimePicker && (
+              <DateTimePicker
+                value={birthTime ?? new Date()}
+                mode="time"
+                display={Platform.OS === "ios" ? "spinner" : "default"}
+                onChange={(_, time) => {
+                  setShowTimePicker(Platform.OS === "ios");
+                  if (time) setBirthTime(time);
+                }}
+              />
+            )}
+          </View>
+
+          {/* ── Birth Place ── */}
+          <View style={styles.fieldBlock}>
+            <Text style={styles.fieldLabel}>BIRTH PLACE</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Janm ka sheher, jaise Mumbai, Maharashtra"
+              placeholderTextColor="#9CA3AF"
+              value={birthPlace}
+              onChangeText={setBirthPlace}
+              autoCapitalize="words"
+              returnKeyType="next"
+              maxLength={255}
+            />
           </View>
 
           {/* ── Interests ── */}

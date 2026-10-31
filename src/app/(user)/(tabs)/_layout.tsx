@@ -14,10 +14,10 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
-const TAB_COUNT = 5;
-const TAB_WIDTH = SCREEN_WIDTH / TAB_COUNT;
 
-const TABS = [
+// All tabs — icon route name se match hoga (index pe nahi), toh href:null
+// se koi tab hide ho toh baki sab ke icons theek rehenge.
+const ALL_TABS = [
   {
     name: "feed",
     icon: (color: string) => <Feather name="home" size={22} color={color} />,
@@ -32,7 +32,6 @@ const TABS = [
       <MaterialCommunityIcons name="star-four-points" size={22} color={color} />
     ),
   },
-
   {
     name: "astrologers",
     icon: (color: string) => <Feather name="users" size={22} color={color} />,
@@ -45,16 +44,22 @@ const TABS = [
 
 function CustomTabBar({ state, navigation }: any) {
   const insets = useSafeAreaInsets();
-  const dotX = useRef(new Animated.Value(state.index * TAB_WIDTH)).current;
+
+  // Visible routes ke hisaab se dynamic width — href:null wale automatically
+  // state.routes mein nahi aate, isliye count aur width wahan se lo.
+  const tabCount = state.routes.length;
+  const tabWidth = SCREEN_WIDTH / tabCount;
+
+  const dotX = useRef(new Animated.Value(state.index * tabWidth)).current;
 
   useEffect(() => {
     Animated.spring(dotX, {
-      toValue: state.index * TAB_WIDTH + TAB_WIDTH / 2 - 3,
+      toValue: state.index * tabWidth + tabWidth / 2 - 3,
       useNativeDriver: true,
       tension: 70,
       friction: 12,
     }).start();
-  }, [state.index]);
+  }, [state.index, tabWidth]);
 
   return (
     <View
@@ -68,16 +73,16 @@ function CustomTabBar({ state, navigation }: any) {
         style={[styles.dot, { transform: [{ translateX: dotX }] }]}
       />
 
-      {/* Tab items */}
+      {/* Tab items — route.name se icon dhundho, index se nahi */}
       {state.routes.map((route: any, index: number) => {
         const isFocused = state.index === index;
-        const tab = TABS[index];
+        const tab = ALL_TABS.find((t) => t.name === route.name);
         const color = isFocused ? "#9d0399" : "#4A4468";
 
         return (
           <TouchableOpacity
             key={route.key}
-            style={styles.tabItem}
+            style={[styles.tabItem, { width: tabWidth }]}
             activeOpacity={1}
             onPress={() => {
               // Same tab dubara press ho toh uska internal stack root pe pop
@@ -119,7 +124,11 @@ export default function TabsLayout() {
             usse root pe pop karo, warna Home se wapas aane par purani category
             detail page hi khulta tha. */}
         <Tabs.Screen name="explore" options={{ popToTopOnBlur: true }} />
-        <Tabs.Screen name="astroverse" />
+        {/* Astrologers ke liye AstroVerse abhi nahi — sirf user role ke liye */}
+        <Tabs.Screen
+          name="astroverse"
+          options={isAstrologer ? { href: null } : undefined}
+        />
         <Tabs.Screen name="astrologers" />
         <Tabs.Screen name="profile" />
       </Tabs>
@@ -145,7 +154,7 @@ const styles = StyleSheet.create({
     position: "relative",
   },
   tabItem: {
-    width: TAB_WIDTH,
+    // width is set dynamically inline (tabWidth) — static value hata diya
     alignItems: "center",
     justifyContent: "center",
   },

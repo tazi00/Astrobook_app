@@ -6,6 +6,9 @@ export type UserProfile = {
   email: string | null;
   name: string | null;
   dateOfBirth: string | null;
+  // Kundli birth details
+  birthTime: string | null;   // HH:MM:SS
+  birthPlace: string | null;
   role: "user" | "astrologer" | "admin";
   interests: string[] | null;
   isOnboarded: boolean;
@@ -35,6 +38,8 @@ export type UpdateProfilePayload = {
   name?: string;
   email?: string;
   dateOfBirth?: string; // YYYY-MM-DD
+  birthTime?: string;   // HH:MM:SS — Kundli ke liye
+  birthPlace?: string;
   interests?: string[];
   avatarUrl?: string;
   bio?: string;

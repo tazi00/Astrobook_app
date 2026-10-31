@@ -16,6 +16,7 @@ export type AuthUser = {
   avatarUrl: string | null;
   bio: string | null;
   interests: string[] | null;
+  dateOfBirth: string | null;
 };
 
 export type AuthResult = {

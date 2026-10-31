@@ -4,8 +4,8 @@ import { useAstrologerApplicationStatus } from "@/features/astrologer-applicatio
 import { AstrologerProfileView } from "@/features/astrologer/components/AstrologerProfileView";
 import { useLogout } from "@/features/auth/hooks/useAuth";
 import { useAuthStore, useUser } from "@/features/auth/store/auth.store";
-import { usePendingCancellations } from "@/features/wallet/hooks/useWallet";
 import { useMyProfile } from "@/features/users/hooks/useProfile";
+import { usePendingCancellations } from "@/features/wallet/hooks/useWallet";
 import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import { RefreshControl, ScrollView, StyleSheet, View } from "react-native";
@@ -41,6 +41,7 @@ export default function ProfileScreen() {
   // Pending cancellation choices — "My Bookings" pe badge dikhane ke liye
   const { requests: pendingCancellations, refetch: refetchPendingCancellations } =
     usePendingCancellations();
+
 
   // USER_MENU mein "My Bookings" ke paas badge inject karo
   const menuWithBadges = useMemo(() => {
